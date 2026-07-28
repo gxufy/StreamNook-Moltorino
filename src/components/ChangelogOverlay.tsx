@@ -407,7 +407,7 @@ const ChangelogOverlay = ({ version, onClose }: ChangelogOverlayProps) => {
             <div className="relative" ref={switcherRef}>
               <button
                 onClick={() => setMenuOpen((o) => !o)}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-textSecondary hover:text-textPrimary px-2.5 py-1.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/5 transition-colors"
+                className="glass-button-secondary inline-flex items-center gap-1.5 text-xs font-medium text-textSecondary hover:text-textPrimary px-2.5 py-1.5 transition-colors"
               >
                 v{displayVersion}
                 <ChevronDown
