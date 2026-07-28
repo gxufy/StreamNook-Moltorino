@@ -30,7 +30,7 @@ use commands::{
     accounts::*, announcements::*, app::*, automation::*, badge_metadata::*, badge_service::*,
     badges::*, cache::*, channel_panels::*, chat::*, chat_identity::*, components::*,
     cosmetics_cache::*, diagnostic_logging::*, discord::*, drops::*, emoji::*, emote_prefetch::*,
-    emotes::*, eventsub::*, hype_train::*, identity::*, justlog::*, layout::*,
+    emotes::*, eventsub::*, ffz::*, hype_train::*, identity::*, justlog::*, layout::*,
     link_preview::*, logs::*, mod_log_storage::*, modroom::*, multi_nook::*, plugins::*,
     profile_cache::*,
     resub::*, screen_capture::*, session::*, settings::*, seventv::*, seventv_cosmetics::*,
@@ -915,7 +915,7 @@ fn main() {
             get_all_third_party_badges,
             get_bttv_pro_badge,
             get_discovered_bttv_pro_badges,
-            push_badge_notification,
+            ingest_badge_drops,
             // Badge Metadata commands
             fetch_badge_metadata,
             // Link preview commands
@@ -1035,6 +1035,7 @@ fn main() {
             fetch_channel_emotes,
             get_emote_by_name,
             clear_emote_cache,
+            ffz_local_user_status,
             // Emote prefetch (AFK bulk cache) commands
             emote_prefetch_plan,
             emote_prefetch_start,

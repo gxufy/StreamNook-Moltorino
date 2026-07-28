@@ -364,25 +364,124 @@ pub async fn get_discovered_bttv_pro_badges() -> Result<Vec<String>, String> {
     Ok(crate::services::bttv_pro_service::get_discovered_bttv_pro_badges())
 }
 
-/// Emit a badge notification received from the real-time feed (the badge
-/// WebSocket, or its latest.json poll fallback) through the exact same
-/// `badge-notification` event the UI already renders. This lets a pushed drop
-/// surface identically to a locally-detected one, with no UI change. Dedupe is
-/// handled client-side by the socket service before this is invoked.
-#[tauri::command]
-pub fn push_badge_notification(
-    app_handle: tauri::AppHandle,
-    badge: crate::services::badge_polling_service::BadgeNotification,
-) -> Result<(), String> {
+/// Whether a badge's earn window is open right now. Prefers the enrichment's
+/// ISO window (authoritative campaign data) over the payload's `status`, which
+/// is only a snapshot of when the relay sent it.
+fn is_window_open(badge: &crate::services::badge_polling_service::BadgeNotification) -> bool {
     use crate::services::badge_polling_service::BadgeNotificationStatus;
+    use chrono::{DateTime, Utc};
+
+    let iso = |key: &str| -> Option<DateTime<Utc>> {
+        badge
+            .enrichment
+            .as_ref()?
+            .get(key)?
+            .as_str()
+            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.with_timezone(&Utc))
+    };
+
+    match (iso("starts_utc"), iso("ends_utc")) {
+        (None, None) => matches!(badge.status, BadgeNotificationStatus::Available),
+        (start, end) => {
+            let now = Utc::now();
+            start.map(|s| now >= s).unwrap_or(true) && end.map(|e| now <= e).unwrap_or(true)
+        }
+    }
+}
+
+/// Merge a drop into the gallery and store its writeup for the More Info panel.
+/// The amend event carries real ids because the detail panel filters on them.
+async fn apply_drop(
+    app_handle: &tauri::AppHandle,
+    badge: &crate::services::badge_polling_service::BadgeNotification,
+) {
     use tauri::Emitter;
 
-    let is_available = matches!(badge.status, BadgeNotificationStatus::Available);
-    app_handle
-        .emit("badge-notification", vec![badge.clone()])
-        .map_err(|e| e.to_string())?;
-    if is_available {
-        let _ = app_handle.emit("badge-available", vec![badge]);
+    let _ = crate::commands::badges::merge_pushed_badge_into_global_cache(badge).await;
+    if let Some(enrichment) = &badge.enrichment {
+        crate::commands::badge_metadata::store_enrichment_metadata(
+            &badge.badge_set_id,
+            &badge.badge_version,
+            enrichment,
+        )
+        .await;
     }
+    let _ = app_handle.emit(
+        "badge-metadata-amended",
+        serde_json::json!({
+            "badge_set_id": badge.badge_set_id,
+            "badge_version": badge.badge_version,
+        }),
+    );
+}
+
+/// Ingest a batch of drops from the real-time feed (the badge WebSocket, or its
+/// `latest.json` poll fallback).
+///
+/// Drops are classified, not deduped, because the relay re-pushes under the
+/// same id: first sighting toasts, an opening window toasts once, a corrected
+/// writeup stores silently, an unchanged re-push does nothing.
+#[tauri::command]
+pub async fn ingest_badge_drops(
+    app_handle: tauri::AppHandle,
+    badges: Vec<crate::services::badge_polling_service::BadgeNotification>,
+) -> Result<(), String> {
+    use crate::services::badge_polling_service::{self as feed, FeedAction};
+    use tauri::Emitter;
+
+    if badges.is_empty() {
+        return Ok(());
+    }
+
+    // Startup fires the poll fallback and the socket's history frame at once,
+    // both carrying the same drops. Serialized so a badge is classified against
+    // the previous batch's recorded state, not concurrently with it.
+    static INGEST_LOCK: once_cell::sync::Lazy<tokio::sync::Mutex<()>> =
+        once_cell::sync::Lazy::new(|| tokio::sync::Mutex::new(()));
+    let _guard = INGEST_LOCK.lock().await;
+
+    // Fresh install: record the relay's backlog as already-seen, no toasts.
+    let seeding = feed::is_empty().await;
+
+    let _ = crate::commands::badges::prune_invalid_global_badges().await;
+
+    for badge in &badges {
+        let feed_id = badge.feed_id();
+        let hash = badge.content_hash();
+        let available = is_window_open(badge);
+
+        let action = if seeding {
+            FeedAction::SilentStore
+        } else {
+            feed::classify(&feed_id, &hash, available).await
+        };
+
+        if !action.stores() {
+            continue;
+        }
+
+        apply_drop(&app_handle, badge).await;
+
+        match action {
+            FeedAction::NotifyNew => {
+                let _ = app_handle.emit("badge-notification", vec![badge.clone()]);
+                if available {
+                    let _ = app_handle.emit("badge-available", vec![badge.clone()]);
+                }
+            }
+            FeedAction::NotifyAvailable => {
+                let _ = app_handle.emit("badge-notification", vec![badge.clone()]);
+                let _ = app_handle.emit("badge-available", vec![badge.clone()]);
+            }
+            // Corrections refresh open surfaces via apply_drop; no toast.
+            FeedAction::SilentStore | FeedAction::Skip => {}
+        }
+
+        // After the store, so a failed store retries on the next frame.
+        feed::record(&feed_id, &hash, action, available).await;
+    }
+
+    feed::persist().await;
     Ok(())
 }

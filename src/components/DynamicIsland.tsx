@@ -6,6 +6,7 @@ import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../stores/AppStore';
 import { Logger } from '../utils/logger';
+import { deriveBadgeStatus } from '../utils/badgeWindow';
 import { playSound, type SoundId } from '../utils/notificationSound';
 import { liveActivityText } from '../utils/liveActivity';
 import { Tooltip } from './ui/Tooltip';
@@ -214,7 +215,11 @@ const DynamicIsland = () => {
         return () => clearInterval(interval);
     }, []);
 
-    const { startStream, settings, openWhisperWithUser, openSettings, addToast, setShowDropsOverlay, setShowBadgesOverlay, setUpdateInfo, isSettingsOpen } = useAppStore();
+    // Actions are stable, so read them without subscribing; only the two state
+    // fields drive re-renders now (this was a whole-store subscription).
+    const { startStream, openWhisperWithUser, openSettings, addToast, setShowDropsOverlay, setShowBadgesOverlay, setUpdateInfo } = useAppStore.getState();
+    const settings = useAppStore((s) => s.settings);
+    const isSettingsOpen = useAppStore((s) => s.isSettingsOpen);
 
     const soundEnabled = settings.live_notifications?.play_sound ?? true;
     const notificationsEnabled = settings.live_notifications?.enabled ?? true;
@@ -885,6 +890,7 @@ const DynamicIsland = () => {
             badge_description?: string;
             status: 'new' | 'available' | 'coming_soon';
             date_info?: string;
+            enrichment?: Record<string, unknown>;
         }>>('badge-notification', (event) => {
             const badges = event.payload;
 
@@ -910,10 +916,19 @@ const DynamicIsland = () => {
                     addNotification(notification);
                 }
 
+                // The pushed status is a snapshot of when the relay sent it, so
+                // a badge queued before its window opened would announce itself
+                // as "Coming soon" after it had already gone live. Prefer the
+                // window when the relay gave us one.
+                const derived = deriveBadgeStatus(undefined, badge.enrichment);
+                const effectiveStatus = derived === 'available' ? 'available'
+                    : derived === 'coming-soon' ? 'coming_soon'
+                    : badge.status;
+
                 // Show toast if enabled
                 if (useToast) {
-                    const statusText = badge.status === 'new' ? 'New badge' :
-                        badge.status === 'available' ? 'Now available' : 'Coming soon';
+                    const statusText = effectiveStatus === 'new' ? 'New badge' :
+                        effectiveStatus === 'available' ? 'Now available' : 'Coming soon';
 
                     addToast(
                         `${statusText}: ${badge.badge_name}${badge.date_info ? ` (${badge.date_info})` : ''}`,
@@ -927,8 +942,8 @@ const DynamicIsland = () => {
                 }
 
                 // Send native notification for badges
-                const nativeStatusText = badge.status === 'new' ? 'New badge available' :
-                    badge.status === 'available' ? 'Badge available now' : 'Badge coming soon';
+                const nativeStatusText = effectiveStatus === 'new' ? 'New badge available' :
+                    effectiveStatus === 'available' ? 'Badge available now' : 'Badge coming soon';
                 sendNativeNotification(
                     badge.badge_name,
                     `${nativeStatusText}${badge.date_info ? ` - ${badge.date_info}` : ''}`
