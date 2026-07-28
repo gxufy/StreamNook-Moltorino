@@ -280,6 +280,34 @@ function namedDateTime(
   );
 }
 
+/**
+ * Render a badge's `date_info` for display. Any ISO stamp in it becomes local
+ * wall-clock text; prose windows ("Dec 1-12") are already readable and pass
+ * through untouched.
+ *
+ * Sources emit these stamps in UTC, so a raw one is not just machine-looking,
+ * it tells the reader the wrong time. A bare stamp with no zone suffix is
+ * therefore read as UTC rather than as local. The year is shown only when it is
+ * not the current one, which keeps the common case short enough for a toast.
+ */
+export function formatBadgeDateInfo(dateInfo?: string | null, now: number = Date.now()): string {
+  if (!dateInfo) return '';
+  const currentYear = new Date(now).getFullYear();
+  return decodeHtmlEntities(dateInfo)
+    .replace(new RegExp(ISO_STAMP, 'g'), (stamp) => {
+      const date = new Date(/[Zz]$/.test(stamp) ? stamp : `${stamp}Z`);
+      if (isNaN(date.getTime())) return stamp;
+      return date.toLocaleString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        ...(date.getFullYear() === currentYear ? {} : { year: 'numeric' }),
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+    })
+    .trim();
+}
+
 function classify(start: number, end: number, now: number): BadgeWindowStatus {
   if (now < start) return 'coming-soon';
   if (now <= end) return 'available';

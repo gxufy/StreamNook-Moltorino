@@ -1155,6 +1155,9 @@ export interface BadgeNotificationData {
   badge_description?: string;
   status: 'new' | 'available' | 'coming_soon';
   date_info?: string; // e.g., "Dec 1-12" or "Available now"
+  // Relay campaign facts, kept so the stored row can re-derive its status at
+  // render time instead of freezing the one that was true when it arrived.
+  enrichment?: Record<string, unknown>;
 }
 
 // Whisper Types

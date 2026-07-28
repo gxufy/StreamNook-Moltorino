@@ -6,7 +6,7 @@ import { listen, emit } from '@tauri-apps/api/event';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../stores/AppStore';
 import { Logger } from '../utils/logger';
-import { deriveBadgeStatus } from '../utils/badgeWindow';
+import { deriveBadgeStatus, formatBadgeDateInfo } from '../utils/badgeWindow';
 import { playSound, type SoundId } from '../utils/notificationSound';
 import { liveActivityText } from '../utils/liveActivity';
 import { Tooltip } from './ui/Tooltip';
@@ -910,6 +910,7 @@ const DynamicIsland = () => {
                             badge_description: badge.badge_description,
                             status: badge.status,
                             date_info: badge.date_info,
+                            enrichment: badge.enrichment,
                         } as BadgeNotificationData,
                     };
 
@@ -920,10 +921,14 @@ const DynamicIsland = () => {
                 // a badge queued before its window opened would announce itself
                 // as "Coming soon" after it had already gone live. Prefer the
                 // window when the relay gave us one.
-                const derived = deriveBadgeStatus(undefined, badge.enrichment);
+                // `date_info` is passed as the copy to parse so a badge with no
+                // enrichment still classifies off the stamps in its own window.
+                const derived = deriveBadgeStatus(badge.date_info, badge.enrichment);
                 const effectiveStatus = derived === 'available' ? 'available'
                     : derived === 'coming-soon' ? 'coming_soon'
                     : badge.status;
+                // The relay sends UTC, so never surface the raw string.
+                const when = formatBadgeDateInfo(badge.date_info);
 
                 // Show toast if enabled
                 if (useToast) {
@@ -931,7 +936,7 @@ const DynamicIsland = () => {
                         effectiveStatus === 'available' ? 'Now available' : 'Coming soon';
 
                     addToast(
-                        `${statusText}: ${badge.badge_name}${badge.date_info ? ` (${badge.date_info})` : ''}`,
+                        `${statusText}: ${badge.badge_name}${when ? ` (${when})` : ''}`,
                         'info',
                         {
                             label: 'View',
@@ -946,7 +951,7 @@ const DynamicIsland = () => {
                     effectiveStatus === 'available' ? 'Badge available now' : 'Badge coming soon';
                 sendNativeNotification(
                     badge.badge_name,
-                    `${nativeStatusText}${badge.date_info ? ` - ${badge.date_info}` : ''}`
+                    `${nativeStatusText}${when ? ` - ${when}` : ''}`
                 );
 
                 if (soundEnabled) {
@@ -1529,9 +1534,18 @@ const DynamicIsland = () => {
                                                                 <p className="text-white/50 text-sm truncate mt-0.5">
                                                                     {(() => {
                                                                         const data = notification.data as BadgeNotificationData;
-                                                                        const statusText = data.status === 'new' ? 'New badge' :
-                                                                            data.status === 'available' ? 'Now available' : 'Coming soon';
-                                                                        return data.date_info ? `${statusText} • ${data.date_info}` : statusText;
+                                                                        // Derived here, not read off the stored row: a badge
+                                                                        // saved while upcoming would otherwise keep saying
+                                                                        // "Coming soon" long after its window opened.
+                                                                        const derived = deriveBadgeStatus(data.date_info, data.enrichment);
+                                                                        const effective = derived === 'available' ? 'available'
+                                                                            : derived === 'coming-soon' ? 'coming_soon'
+                                                                            : data.status;
+                                                                        const statusText = derived === 'expired' ? 'Ended' :
+                                                                            effective === 'new' ? 'New badge' :
+                                                                            effective === 'available' ? 'Now available' : 'Coming soon';
+                                                                        const when = formatBadgeDateInfo(data.date_info);
+                                                                        return when ? `${statusText} • ${when}` : statusText;
                                                                     })()}
                                                                 </p>
                                                             </div>
