@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
-import { motion, LayoutGroup } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { useAppStore } from '../stores/AppStore';
 import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { Search, Gift, MonitorPlay, BarChart3, Package, ArrowDownUp, SlidersHorizontal } from 'lucide-react';
+import { Search, Gift, MonitorPlay, BarChart3, Package, ArrowDownUp, SlidersHorizontal, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { usePluginUiRegistry, selectSlot } from '../plugins-ui/registry';
 import { Dropdown } from './ui/Dropdown';
 import { SegmentedSelect } from './settings/_primitives';
@@ -106,6 +106,10 @@ export default function DropsCenter() {
     // When on, include campaigns with no watch-time (mineable) drop — paid, sub,
     // gift, and event-only drops — instead of hiding them from the grid.
     const [showAllDrops, setShowAllDrops] = useState(false);
+    // Fully-collected games live in their own collapsible section under the
+    // grid (mirrors the Inventory tab's Completed Drops section) instead of
+    // sinking to the bottom of the active grid.
+    const [showCompletedGames, setShowCompletedGames] = useState(false);
     const [selectedGame, setSelectedGame] = useState<UnifiedGame | null>(null);
     const [, setIsLoadingGameDetail] = useState(false);
     const { addToast, setShowDropsOverlay, currentUser, dropsSearchTerm, setDropsSearchTerm } = useAppStore();
@@ -406,12 +410,16 @@ export default function DropsCenter() {
                         totalDrops++;
                         const dp = nextProgress.find(p => p.drop_id === drop.id) || drop.progress;
                         const hasCurrentProgress = !!dp && ((dp.current_minutes_watched || 0) > 0 || dp.is_claimed === true);
+                        // An inventory drop flagged is_claimed is a proven claim of THIS
+                        // drop instance (reissues mint new drop ids), so it counts even
+                        // while a stale progress record still carries watch minutes.
+                        // Benefit id/name matching stays gated on no-current-progress.
                         const owned = dp?.is_claimed === true
+                            || ownedDropIds.has(drop.id)
                             || (!hasCurrentProgress && (
-                                ownedDropIds.has(drop.id)
-                                || (drop.benefit_edges?.some(b =>
+                                drop.benefit_edges?.some(b =>
                                     ownedBenefitIds.has(b.id) || ownedByName(b.name)
-                                ) ?? false)
+                                ) ?? false
                             ));
                         if (owned) {
                             claimedCount++;
@@ -951,12 +959,16 @@ export default function DropsCenter() {
                             // ONLY when this drop isn't itself in progress. A drop with watch-time
                             // is being actively collected and must not be counted as already-earned.
                             const hasCurrentProgress = !!dp && ((dp.current_minutes_watched || 0) > 0 || dp.is_claimed === true);
+                            // An inventory drop flagged is_claimed is a proven claim of
+                            // THIS drop instance (reissues mint new drop ids), so it
+                            // counts even while a stale progress record still carries
+                            // watch minutes. Benefit id/name matching stays gated.
                             const owned = dp?.is_claimed === true
+                                || ownedDropIds.has(drop.id)
                                 || (!hasCurrentProgress && (
-                                    ownedDropIds.has(drop.id)
-                                    || (drop.benefit_edges?.some(b =>
+                                    drop.benefit_edges?.some(b =>
                                         ownedBenefitIds.has(b.id) || ownedByName(b.name)
-                                    ) ?? false)
+                                    ) ?? false
                                 ));
                             if (owned) {
                                 claimedDropsCount++;
@@ -1407,7 +1419,7 @@ export default function DropsCenter() {
             </svg>
 
             {/* Header with Tabs */}
-            <div className="flex items-center justify-center gap-2 px-4 py-3 bg-backgroundSecondary border-b border-borderLight shrink-0 relative z-20">
+            <div className="flex items-center justify-center gap-2 px-4 py-3 bg-backgroundSecondary border-b border-borderSubtle shrink-0 relative z-20">
                 {/* Tab Navigation - Framer Motion Sliding Highlight Style (Centered) */}
                 <LayoutGroup>
                 <div className="flex items-center glass-panel px-1.5 py-1 rounded-xl">
@@ -1510,7 +1522,7 @@ export default function DropsCenter() {
             {/* Games browsing toolbar: filter + sort on the left, search on the
                 right. Full-width row so labels never fight the tabs for space. */}
             {activeTab === 'games' && (
-                <div className="flex items-center justify-between gap-3 px-4 py-2 bg-backgroundSecondary border-b border-borderLight shrink-0 relative z-10">
+                <div className="flex items-center justify-between gap-3 px-4 py-2 bg-backgroundSecondary border-b border-borderSubtle shrink-0 relative z-10">
                     <div className="flex items-center gap-3">
                         <SegmentedSelect
                             value={showAllDrops ? 'all' : 'mineable'}
@@ -1577,27 +1589,140 @@ export default function DropsCenter() {
                             </div>
                         )}
 
-                        {/* Game Cards Grid - responsive layout that scales with window size */}
-                        {filteredGames.length > 0 && (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-4">
-                                {filteredGames.map(game => (
-                                    <GameCard
-                                        key={game.id}
-                                        game={game}
-                                        allGames={unifiedGames}
-                                        progress={progress}
-                                        dropProgress={dropProgress}
-                                        isSelected={selectedGame?.id === game.id}
-                                        isFavorite={(dropsSettings?.favorite_games || []).some(
-                                            pg => pg.toLowerCase() === game.name.toLowerCase()
-                                        )}
-                                        onClick={() => handleGameSelect(selectedGame?.id === game.id ? null : game)}
-                                        onStopAutomation={handleStopAutomation}
-                                        onToggleFavorite={handleToggleFavorite}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                        {/* Game Cards Grid - responsive layout that scales with window size.
+                            Fully-collected games are split out of the active grid into
+                            their own collapsible section below (same idiom as the
+                            Inventory tab's Completed Drops section). */}
+                        {filteredGames.length > 0 && (() => {
+                            const activeGames = filteredGames.filter(g => !g.all_drops_claimed);
+                            const completedGames = filteredGames.filter(g => g.all_drops_claimed);
+                            const gridClass = "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 3xl:grid-cols-8 gap-3 sm:gap-4";
+                            const renderGameCard = (game: UnifiedGame) => (
+                                <GameCard
+                                    key={game.id}
+                                    game={game}
+                                    allGames={unifiedGames}
+                                    progress={progress}
+                                    dropProgress={dropProgress}
+                                    isSelected={selectedGame?.id === game.id}
+                                    isFavorite={(dropsSettings?.favorite_games || []).some(
+                                        pg => pg.toLowerCase() === game.name.toLowerCase()
+                                    )}
+                                    onClick={() => handleGameSelect(selectedGame?.id === game.id ? null : game)}
+                                    onStopAutomation={handleStopAutomation}
+                                    onToggleFavorite={handleToggleFavorite}
+                                />
+                            );
+                            return (
+                                <>
+                                    {activeGames.length > 0 && (
+                                        <div className={gridClass}>
+                                            {activeGames.map(renderGameCard)}
+                                        </div>
+                                    )}
+
+                                    {/* Everything collected: a calm caught-up note instead of an empty grid */}
+                                    {activeGames.length === 0 && !searchTerm && (
+                                        <div className="flex flex-col items-center justify-center text-center py-10">
+                                            <div className="p-3 rounded-full bg-success/15 mb-3">
+                                                <Check size={28} className="text-success" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-textPrimary mb-1">All caught up</h3>
+                                            <p className="text-sm text-textSecondary">You have collected every available drop.</p>
+                                        </div>
+                                    )}
+
+                                    {/* Docked completed drawer. Collapsed it is a compact pill in
+                                        the bottom-right corner (always in view, near-zero
+                                        footprint); expanded it blooms into the full panel sliding
+                                        up from the bottom edge. The sticky wrapper spans the row
+                                        but is pointer-transparent so cards behind it stay
+                                        clickable. */}
+                                    {completedGames.length > 0 && (
+                                        <div className={`sticky bottom-0 z-20 pointer-events-none ${activeGames.length > 0 ? 'mt-4' : ''}`}>
+                                            <AnimatePresence initial={false} mode="wait">
+                                                {!showCompletedGames ? (
+                                                    <motion.div
+                                                        key="completed-pill"
+                                                        initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                        exit={{ opacity: 0, y: 10, scale: 0.96 }}
+                                                        // The dynamic-island grow/shrink spring, so both
+                                                        // directions of the morph feel identical.
+                                                        transition={{ type: 'spring', stiffness: 360, damping: 32, mass: 0.9, opacity: { duration: 0.15 } }}
+                                                        className="flex justify-center pb-2"
+                                                    >
+                                                        {/* Same glass-badge language as the LIVE badge, in
+                                                            success green: enough presence to be seen over
+                                                            the card grid, still a pill rather than a bar. */}
+                                                        <motion.button
+                                                            onClick={() => setShowCompletedGames(true)}
+                                                            aria-expanded={false}
+                                                            whileHover={{ scale: 1.04 }}
+                                                            whileTap={{ scale: 0.97 }}
+                                                            transition={{ type: 'spring', stiffness: 360, damping: 32, mass: 0.9 }}
+                                                            className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-textPrimary"
+                                                            style={{
+                                                                backgroundColor: 'color-mix(in srgb, var(--color-background) 90%, transparent)',
+                                                                backgroundImage: 'linear-gradient(135deg, color-mix(in srgb, var(--color-success) 30%, transparent) 0%, color-mix(in srgb, var(--color-success) 18%, transparent) 50%, color-mix(in srgb, var(--color-success) 30%, transparent) 100%)',
+                                                                border: '1px solid color-mix(in srgb, var(--color-success) 55%, transparent)',
+                                                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.15), 0 4px 16px rgba(0,0,0,0.45)',
+                                                            }}
+                                                        >
+                                                            <Check size={15} className="text-success" strokeWidth={3} />
+                                                            <span>Completed</span>
+                                                            <span className="px-1.5 py-0.5 rounded-full bg-success/25 text-success text-xs font-bold tabular-nums leading-none">
+                                                                {completedGames.length}
+                                                            </span>
+                                                            <ChevronUp size={15} className="text-textSecondary" />
+                                                        </motion.button>
+                                                    </motion.div>
+                                                ) : (
+                                                    <motion.div
+                                                        key="completed-panel"
+                                                        initial={{ opacity: 0, y: 24 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: 24 }}
+                                                        // Same dynamic-island spring as the pill, so the
+                                                        // expand and collapse mirror each other.
+                                                        transition={{ type: 'spring', stiffness: 360, damping: 32, mass: 0.9, opacity: { duration: 0.15 } }}
+                                                        className="pointer-events-auto glass-panel border border-success/30 overflow-hidden rounded-lg origin-bottom"
+                                                        style={{ backgroundColor: 'color-mix(in srgb, var(--color-background) 92%, transparent)' }}
+                                                    >
+                                                        <button
+                                                            onClick={() => setShowCompletedGames(false)}
+                                                            aria-expanded={true}
+                                                            className="w-full flex items-center justify-between gap-3 p-3 hover:bg-surface/50 transition-colors"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="p-2 rounded-lg bg-success/20 border border-success/30">
+                                                                    <Check size={20} className="text-success" />
+                                                                </div>
+                                                                <div className="text-left">
+                                                                    <h3 className="font-bold text-textPrimary">Completed</h3>
+                                                                    <p className="text-xs text-textSecondary">Every drop for these games is collected</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="px-2 py-1 text-xs font-bold rounded-lg bg-success/20 text-success border border-success/30">
+                                                                    {completedGames.length} {completedGames.length === 1 ? 'game' : 'games'}
+                                                                </span>
+                                                                <ChevronDown size={18} className="text-textSecondary" />
+                                                            </div>
+                                                        </button>
+                                                        <div className="border-t border-success/20 bg-background/50 p-3 max-h-[55vh] overflow-y-auto custom-scrollbar">
+                                                            <div className={gridClass}>
+                                                                {completedGames.map(renderGameCard)}
+                                                            </div>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
 
                         {/* Detail Panel */}
                         {selectedGame && (
