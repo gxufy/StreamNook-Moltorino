@@ -270,8 +270,16 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   {
     tab: 'Theme',
     section: 'Font',
+    sectionId: 'settings-section-font',
     title: 'Font',
-    description: 'Interface font, independent of the theme. Choose any font with any theme. Satoshi, Twitch (Inter), Geist, Manrope, Outfit, Space Grotesk, Serif, and System.'
+    description: 'Interface font, independent of the theme. Choose any font with any theme. Satoshi, Twitch (Inter), Geist, Manrope, Outfit, Space Grotesk, Serif, System, or a custom font of your own.'
+  },
+  {
+    tab: 'Theme',
+    section: 'Font',
+    sectionId: 'settings-section-font',
+    title: 'Custom font',
+    description: 'Use any font you want for the app. Type a name like Poppins, Bebas Neue, or Rubik and it loads automatically, or type the name of a font already installed on this PC.'
   },
 
   // === Chat ===
@@ -587,6 +595,19 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   {
     tab: 'Chat',
     section: 'Render Style',
+    title: 'FFZ emote effects',
+    description: 'Apply FrankerFaceZ modifiers (wide, flips, rainbow, shake) to the emote before them.'
+  },
+  {
+    tab: 'Chat',
+    section: 'User Cards',
+    sectionId: 'settings-section-user-cards',
+    title: 'Open on their messages',
+    description: 'Whether clicking someone in chat opens their recent messages first or their profile first. The card switches between the two either way.'
+  },
+  {
+    tab: 'Chat',
+    section: 'Render Style',
     title: '7TV emote update notices',
     description: "Show a chat notice when a channel's 7TV emote set changes live (a mod adds, removes, or renames an emote)."
   },
@@ -737,6 +758,18 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
     section: 'Moderation Actions',
     title: 'Pin Action',
     description: 'The inline Pin button next to Copy is always available to mods; this toggles whether a Pin tile also appears in the drag-to-moderate gesture.'
+  },
+  {
+    tab: 'Moderation',
+    section: 'Mod Rooms',
+    title: 'Mod Rooms',
+    description: 'Private, encrypted chat rooms for the mod teams of channels you moderate. Manage the one-time Twitch consent: see which account is connected, connect, or disconnect.'
+  },
+  {
+    tab: 'Moderation',
+    section: 'Mod Rooms',
+    title: 'Connection',
+    description: 'Which account mod rooms are connected as. Connect the one-time consent or disconnect to switch accounts or revoke access.'
   },
   {
     tab: 'Moderation',
