@@ -1542,6 +1542,7 @@ fn parse_runs(message: Option<&Value>) -> (Vec<MessageSegment>, String) {
                     emote_id: emoji.get("emojiId").and_then(|e| e.as_str()).map(String::from),
                     emote_url: url.to_string(),
                     is_zero_width: None,
+                    modifier_flags: None,
                 });
             }
         }

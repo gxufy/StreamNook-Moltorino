@@ -8,7 +8,7 @@ import { Logger, setDiagnosticsEnabled } from '../utils/logger';
 import { getPlayerControls } from '../keybindings/playerControls';
 import { qualitiesEquivalent } from '../utils/quality';
 import { reportCodecPreference } from '../utils/codecPreference';
-import { upsertUser, grantActiveSeasonalAccolades, grantCakeDayAccolade, grantAtmosphereOwnership } from '../services/supabaseService';
+import { upsertUser, claimLoginAccolades, grantAtmosphereOwnership } from '../services/supabaseService';
 import { emitSettingsUpdated } from '../utils/settingsBroadcast';
 
 type StreamStartResult = {
@@ -275,6 +275,9 @@ interface AppState {
   // flashes before stored credentials have been verified.
   isBooting: boolean;
   currentUser: TwitchUser | null;
+  /** Local user's FFZ subscriber status; gates which FFZ effect emotes the
+   *  picker/tab-complete offer (rendering is never gated). */
+  ffzIsSubwoofer: boolean;
   dropProgressActive: boolean;
   setDropProgressActive: (active: boolean) => void;
   // True when every watch-time reward for the game currently being watched is
@@ -522,6 +525,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isAuthenticated: false,
   isBooting: true,
   currentUser: null,
+  ffzIsSubwoofer: false,
   dropProgressActive: false,
   setDropProgressActive: (active: boolean) => set({ dropProgressActive: active }),
   dropProgressComplete: false,
@@ -2554,6 +2558,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       set({ isAuthenticated: true, currentUser: user });
 
+      // FFZ subscriber status for effect-emote composition gating (cached
+      // backend-side, so periodic auth checks re-invoking this are cheap).
+      invoke<{ is_subwoofer: boolean }>('ffz_local_user_status')
+        .then((s) => set({ ffzIsSubwoofer: !!s?.is_subwoofer }))
+        .catch(() => set({ ffzIsSubwoofer: false }));
+
       // Track user in Supabase for analytics (only on initial login, not periodic checks)
       if (!wasAuthenticated) {
         try {
@@ -2568,13 +2578,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           });
         }
 
-        // Collect today's season/holiday badges + cake day if applicable.
-        // Idempotent server-side; fire and forget.
-        grantActiveSeasonalAccolades(user.user_id).catch((e) => {
-          Logger.warn('[Auth] Failed to grant seasonal badge:', e);
-        });
-        grantCakeDayAccolade(user.user_id, user.login || '').catch((e) => {
-          Logger.warn('[Auth] Failed to grant cake day badge:', e);
+        // Collect today's season/holiday + cake-day accolades server-side (the
+        // RPC enforces the window against the server clock and reads the verified
+        // creation date; idempotent). Fire and forget.
+        claimLoginAccolades(user.user_id).catch((e) => {
+          Logger.warn('[Auth] Failed to claim login accolades:', e);
         });
 
         // Claim login-window event rewards (server enforces the window). Lazy
