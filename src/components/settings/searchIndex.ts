@@ -1032,6 +1032,27 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   },
   {
     tab: 'Integrations',
+    section: 'Moltorino',
+    sectionId: 'settings-section-moltorino',
+    title: 'Moltorino',
+    description: 'Open chat in Moltorino, an external Twitch chat client you install yourself. Chatterino fork, third-party chat, separate window, external app, launch.'
+  },
+  {
+    tab: 'Integrations',
+    section: 'Moltorino',
+    sectionId: 'settings-section-moltorino',
+    title: 'Moltorino application',
+    description: 'Set the Moltorino executable path on this PC. Browse for Moltorino.exe, exe location, verify install, external chat client.'
+  },
+  {
+    tab: 'Integrations',
+    section: 'Moltorino',
+    sectionId: 'settings-section-moltorino',
+    title: 'Show chat button',
+    description: 'Show the "Open chat in Moltorino" button in the Twitch chat header, beside Pop out chat. Opt-in; StreamNook native chat stays the default.'
+  },
+  {
+    tab: 'Integrations',
     section: 'Ad Blocking',
     title: 'Ad Blocking',
     description: 'Block Twitch ads with the ad blocker plugin. Ad-free, TTV LOL, proxy, splice. Plugin integration panels appear here once installed.'

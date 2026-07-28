@@ -92,6 +92,14 @@ export interface ChatLoggingSettings {
   timestamps?: boolean; // Start each line with the time it was sent (default: true)
 }
 
+// Optional external Moltorino chat integration. Mirrors MoltorinoSettings on the
+// Rust side. StreamNook never bundles Moltorino; the user points this at their
+// own install. Machine-local, so it is excluded from portable settings backups.
+export interface MoltorinoSettings {
+  executable_path?: string; // Absolute path to the user's Moltorino .exe; unset = integration inert
+  show_chat_button?: boolean; // Show "Open chat in Moltorino" in the chat header (default: false)
+}
+
 export interface DropsSettings {
   auto_claim_drops: boolean;
   auto_claim_channel_points: boolean;
@@ -704,6 +712,7 @@ export interface Settings {
   show_channel_point_redemptions?: boolean; // Show no-input channel-point redemptions as chat rows (default on)
   collapse_gift_subs?: boolean; // Collapse mass gift-sub bombs into one announcement row with recipients (default on)
   chat_logging?: ChatLoggingSettings; // Save chat to plain text files as you watch
+  moltorino?: MoltorinoSettings; // Optional external Moltorino chat integration (opt-in, machine-local)
   moderation?: ModerationSettings;
   keybindings?: KeybindingOverrides; // Customizable keyboard shortcut overrides (id -> chords)
   // Which action buttons show in the video player's top-right overlay, by id:

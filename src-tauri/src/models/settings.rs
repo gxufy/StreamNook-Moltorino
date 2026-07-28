@@ -151,6 +151,23 @@ impl Default for StreamlinkSettings {
     }
 }
 
+/// Optional external Moltorino chat integration. StreamNook never bundles or
+/// links Moltorino; the user points this at their own install and StreamNook
+/// spawns it on demand. Machine-local (an absolute exe path), so this group is
+/// excluded from portable settings backups — see NON_PORTABLE_KEYS.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct MoltorinoSettings {
+    /// Absolute path to the user's Moltorino executable. None/empty = not set up,
+    /// which keeps the whole integration inert.
+    #[serde(default)]
+    pub executable_path: Option<String>,
+    /// Whether the "Open chat in Moltorino" action shows in the chat header.
+    /// Defaults to false: the integration is opt-in and StreamNook's native chat
+    /// stays the default with no new UI until the user asks for it.
+    #[serde(default)]
+    pub show_chat_button: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ChatDesignSettings {
     pub show_dividers: bool,
@@ -510,6 +527,9 @@ pub struct Settings {
     /// day), written by services::chat_logger_service.
     #[serde(default)]
     pub chat_logging: ChatLoggingSettings,
+    /// Optional external Moltorino chat integration (opt-in, machine-local).
+    #[serde(default)]
+    pub moltorino: MoltorinoSettings,
     /// Catch-all for preference groups the frontend manages but this struct does
     /// not model field-by-field: highlight phrases, custom chat commands,
     /// moderation prefs, custom themes, the OLED accent, and any future ones.
@@ -555,6 +575,7 @@ impl Default for Settings {
             show_mod_logs: false,
             keybindings: HashMap::new(),
             chat_logging: ChatLoggingSettings::default(),
+            moltorino: MoltorinoSettings::default(),
             extra: HashMap::new(),
         }
     }

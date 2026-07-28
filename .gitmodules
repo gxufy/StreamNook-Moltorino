@@ -1,0 +1,3 @@
+[submodule "vendor/moltorino"]
+	path = vendor/moltorino
+	url = https://codeberg.org/MoltoBenne/Moltorino.git

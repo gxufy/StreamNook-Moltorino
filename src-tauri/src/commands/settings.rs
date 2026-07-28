@@ -58,6 +58,10 @@ const NON_PORTABLE_KEYS: &[&str] = &[
     "current_account",
     "setup_complete",
     "last_seen_version",
+    // Points at an executable on *this* machine, so it would be wrong (or a
+    // broken path) on any other one. The opt-in button toggle lives in the same
+    // group and travels with it.
+    "moltorino",
 ];
 
 /// Absolute path of the folder that holds settings.json (alongside caches/logs).

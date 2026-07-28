@@ -5,7 +5,7 @@ import ChatMessageList from './ChatMessageList';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { Pickaxe, Gift, Settings } from 'lucide-react';
+import { Pickaxe, Gift, Settings, MessagesSquare } from 'lucide-react';
 
 // Channel Points Icon (Twitch style)
 const ChannelPointsIcon = ({ className = "", size = 14 }: { className?: string; size?: number }) => (
@@ -741,6 +741,27 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
 
 
   const settings = useAppStore((s) => s.settings);
+
+  // Moltorino: whether to offer "Open chat in Moltorino" beside Pop out chat.
+  // Deliberately narrow — this is the ONE normal, main, live Twitch chat panel:
+  //   • opt-in setting on, and an executable actually configured
+  //   • Twitch only (Moltorino speaks Twitch IRC; Kick/YouTube/TikTok can't work)
+  //   • !channelOverride excludes every MultiChat popout pane AND MultiNook's
+  //     synthesized active slot, so it can never show in either
+  //   • !isMultiNookActive is belt-and-braces for MultiNook with no active slot,
+  //     where currentStream falls through to rawCurrentStream
+  //   • !isVodReplay / live media only: replay chat is historical, so launching a
+  //     live external chat for it would be misleading
+  // Whispers never mount ChatWidget at all, so they're excluded by construction.
+  const moltorinoPath = settings.moltorino?.executable_path?.trim() ?? '';
+  const canOpenInMoltorino =
+    isTwitch &&
+    !channelOverride &&
+    !isMultiNookActive &&
+    !isVodReplay &&
+    currentMediaType === 'live' &&
+    (settings.moltorino?.show_chat_button ?? false) &&
+    moltorinoPath.length > 0;
 
   // No-input channel-point redemptions (from Twitch's channel-wide community
   // points feed). Message-style and text-input rewards already surface in chat
@@ -3642,6 +3663,37 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
                           <path d="M14 2L7 9" />
                           <path d="M13 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4" />
                         </svg>
+                      </button>
+                    </Tooltip>
+                  )}
+                  {/* Open chat in Moltorino — hands the channel to the user's own
+                      external chat client (see `canOpenInMoltorino` above for the
+                      gating). Fire-and-forget: StreamNook's native chat stays
+                      connected and on screen, nothing here is torn down. */}
+                  {currentStream && canOpenInMoltorino && (
+                    <Tooltip content="Open chat in Moltorino" side="top">
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const channel = currentStream.user_login;
+                          try {
+                            // path: null — let the backend read the persisted
+                            // setting so there's one authoritative source for
+                            // which executable actually gets spawned.
+                            await invoke('launch_moltorino', { path: null, channel });
+                            useAppStore
+                              .getState()
+                              .addToast(`Opening ${channel} in Moltorino`, 'success');
+                          } catch (err) {
+                            Logger.error('[ChatWidget] Launch Moltorino failed:', err);
+                            useAppStore.getState().addToast(String(err), 'error');
+                          }
+                        }}
+                        className="pointer-events-auto grid h-5 w-5 place-items-center rounded text-textSecondary transition-colors hover:bg-surface-hover hover:text-textPrimary"
+                        aria-label="Open chat in Moltorino"
+                      >
+                        <MessagesSquare className="h-[13px] w-[13px]" />
                       </button>
                     </Tooltip>
                   )}

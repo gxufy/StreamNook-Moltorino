@@ -31,7 +31,8 @@ use commands::{
     badges::*, cache::*, channel_panels::*, chat::*, chat_identity::*, components::*,
     cosmetics_cache::*, diagnostic_logging::*, discord::*, drops::*, emoji::*, emote_prefetch::*,
     emotes::*, eventsub::*, ffz::*, hype_train::*, identity::*, justlog::*, layout::*,
-    link_preview::*, logs::*, mod_log_storage::*, modroom::*, multi_nook::*, plugins::*,
+    link_preview::*, logs::*, mod_log_storage::*, modroom::*, moltorino::*, multi_nook::*,
+    plugins::*,
     profile_cache::*,
     resub::*, screen_capture::*, session::*, settings::*, seventv::*, seventv_cosmetics::*,
     seventv_cosmetics_fetch::*, song_id::*, streaming::*, subscriptions::*, twitch::*,
@@ -1148,6 +1149,9 @@ fn main() {
             plugins_provides,
             plugins_report_stream_event,
             plugins_ui_bundle,
+            // Moltorino integration (optional external chat client)
+            validate_moltorino_path,
+            launch_moltorino,
         ])
         // Window-event handler. Two behaviors:
         //
