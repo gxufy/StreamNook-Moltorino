@@ -649,6 +649,14 @@ pub async fn restart_to_apply_update(app_handle: tauri::AppHandle) -> Result<(),
             .arg(&vbs_path)
             .spawn()
             .map_err(|e| format!("Failed to run update script: {}", e))?;
+        // std::process::exit skips Tauri's RunEvent::Exit, so the window-state
+        // plugin never auto-saves and the relaunch forgets which monitor/size
+        // the window had. Flush geometry ourselves first, matching the flags the
+        // plugin is built with (position/size/maximized only).
+        use tauri_plugin_window_state::{AppHandleExt, StateFlags};
+        let _ = app_handle.save_window_state(
+            StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED,
+        );
         std::process::exit(0);
     }
 
