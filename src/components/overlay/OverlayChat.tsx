@@ -926,13 +926,22 @@ export const OverlayChat = ({ messages, style: rawStyle, superSample = 1 }: { me
     if (typeof document === 'undefined') return;
     const fam = primaryFamily(style.fontFamily);
     if (!fam || GENERIC_FAMILIES.has(fam.toLowerCase())) return;
-    const id = 'sn-ov-font-' + fam.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    if (document.getElementById(id)) return;
-    const link = document.createElement('link');
-    link.id = id;
-    link.rel = 'stylesheet';
-    link.href = `https://fonts.bunny.net/css2?family=${encodeURIComponent(fam).replace(/%20/g, '+')}:wght@400;600;700&display=swap`;
-    document.head.appendChild(link);
+    // One reusable <link> whose href is swapped, debounced. The builder's font
+    // box fires on every keystroke, and the previous per-family id appended a
+    // fresh stylesheet (and a wasted request) for every prefix typed, none of
+    // which were ever removed.
+    const timer = setTimeout(() => {
+      const id = 'sn-ov-webfont';
+      let link = document.getElementById(id) as HTMLLinkElement | null;
+      if (!link) {
+        link = document.createElement('link');
+        link.id = id;
+        link.rel = 'stylesheet';
+        document.head.appendChild(link);
+      }
+      link.href = `https://fonts.bunny.net/css2?family=${encodeURIComponent(fam).replace(/%20/g, '+')}:wght@400;600;700&display=swap`;
+    }, 250);
+    return () => clearTimeout(timer);
   }, [style.fontFamily]);
   const containerRef = useRef<HTMLDivElement>(null);
   // How many of the newest messages to mount. Driven by measurement below, not a
