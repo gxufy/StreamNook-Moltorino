@@ -375,6 +375,34 @@ function bumpRevision() {
   useChatConnectionStore.setState((state) => ({ revision: state.revision + 1 }));
 }
 
+/**
+ * Lazily-loaded per-message engines, resolved once and then called synchronously.
+ *
+ * These were `import()`ed inside the per-message path, so every single chat
+ * message allocated two promises and queued two microtask hops even when no nuke
+ * or reminder was armed. The module registry caches the module, but not the
+ * promise/closure churn. First use still loads asynchronously (so the chunk stays
+ * split); every message after that takes the synchronous branch.
+ */
+type NukeEngine = typeof import('../utils/nukeEngine');
+type ReminderEngine = typeof import('../utils/reminderEngine');
+let nukeEngineMod: NukeEngine | null = null;
+let nukeEnginePromise: Promise<NukeEngine> | null = null;
+let reminderEngineMod: ReminderEngine | null = null;
+let reminderEnginePromise: Promise<ReminderEngine> | null = null;
+
+function withNukeEngine(fn: (mod: NukeEngine) => void): void {
+  if (nukeEngineMod) { fn(nukeEngineMod); return; }
+  nukeEnginePromise ??= import('../utils/nukeEngine');
+  void nukeEnginePromise.then((mod) => { nukeEngineMod = mod; fn(mod); });
+}
+
+function withReminderEngine(fn: (mod: ReminderEngine) => void): void {
+  if (reminderEngineMod) { fn(reminderEngineMod); return; }
+  reminderEnginePromise ??= import('../utils/reminderEngine');
+  void reminderEnginePromise.then((mod) => { reminderEngineMod = mod; fn(mod); });
+}
+
 // --- Coalesced render flush --------------------------------------------------
 //
 // Each incoming chat frame used to call bumpRevision() directly, which is one
@@ -1374,8 +1402,9 @@ function handleWsMessage(raw: string) {
         // on the slice; ChatWidget feeds it into the same pinned banner as Twitch.
         const ch = (parsed.channel as string | undefined)?.toLowerCase();
         const pin = parsed.type === 'PINNED' ? parsed.pin : null;
+        // withSlice already bumps when it finds the slice, and nothing changed
+        // when it doesn't, so no second bump here.
         if (ch) withSlice(ch, (slice) => { slice.pinnedMessage = pin; });
-        bumpRevision();
         return;
       }
       if (parsed.type === 'ROOMSTATE') {
@@ -1389,9 +1418,15 @@ function handleWsMessage(raw: string) {
             r9k: parsed.r9k ?? slice.roomState.r9k,
           };
         };
-        if (ch) withSlice(ch, apply);
-        else for (const s of useChatConnectionStore.getState().channels.values()) apply(s);
-        bumpRevision();
+        if (ch) {
+          // withSlice bumps for us.
+          withSlice(ch, apply);
+        } else {
+          // The channel-less form mutates every slice directly, so it has to
+          // bump itself.
+          for (const s of useChatConnectionStore.getState().channels.values()) apply(s);
+          bumpRevision();
+        }
         return;
       }
       if (parsed.type === 'NOTICE') {
@@ -1648,14 +1683,14 @@ function appendStructuredMessage(slice: ChannelSlice, parsed: any) {
     // Active /nuke future-window check. No-op if no nukes are armed for this
     // channel. Fire-and-forget; nuke action errors are logged inside the engine.
     if (slice.channel) {
-      void import('../utils/nukeEngine').then((mod) => {
+      withNukeEngine((mod) => {
         void mod.checkActiveNukesForMessage(slice.channel, parsed);
       });
     }
 
     // Keyword reminders. No-op unless a keyword reminder is scoped to this channel.
     if (slice.channel) {
-      void import('../utils/reminderEngine').then((mod) => {
+      withReminderEngine((mod) => {
         mod.checkRemindersForMessage(slice.channel, parsed);
       });
     }
@@ -2282,6 +2317,20 @@ export interface ChannelChatSnapshot {
   /** Currently pinned message (provider-driven, e.g. Kick's pin event), or null.
    *  Shaped like ChatWidget's PinnedMessage so it can feed the same banner. */
   pinnedMessage: any | null;
+  /**
+   * Changes whenever anything about this channel's chat changed. Pass it to the
+   * memoized message list so it has an honest re-render trigger.
+   *
+   * REQUIRED, not an optimization. `messages` is NOT safe to rely on for change
+   * detection: `flushPending` appends in place and `trimWithEventRetention`
+   * returns the SAME array reference while the buffer is under its cap, so the
+   * array identity does not change for roughly the first 100 messages after
+   * joining a channel. Several paths (CLEARMSG/CLEARCHAT strikethrough, the
+   * own-echo upgrade, repaintOwnBadges) also mutate messages in place and never
+   * touch array identity at all. Without this token a memoized list silently
+   * stops updating and chat looks dead on join.
+   */
+  renderToken: number;
 }
 
 const EMPTY_SNAPSHOT: ChannelChatSnapshot = {
@@ -2294,6 +2343,7 @@ const EMPTY_SNAPSHOT: ChannelChatSnapshot = {
   clearedUserContexts: new Map(),
   liveMessageCount: 0,
   pinnedMessage: null,
+  renderToken: 0,
 };
 
 /** React hook returning the live message count for a channel. */
@@ -2380,8 +2430,10 @@ export function useChannelEmotes(
 export function useChannelChat(channel: string | null | undefined): ChannelChatSnapshot {
   const key = channel ? channel.toLowerCase() : null;
   // Subscribe to revision to drive updates; read the slice imperatively to
-  // avoid Map.get returning new references on every render.
-  useChatConnectionStore((state) => state.revision);
+  // avoid Map.get returning new references on every render. The revision is
+  // also handed back as `renderToken` (see ChannelChatSnapshot) so memoized
+  // consumers have a change signal that in-place message mutations can't hide.
+  const renderToken = useChatConnectionStore((state) => state.revision);
   if (!key) return EMPTY_SNAPSHOT;
   const slice = useChatConnectionStore.getState().channels.get(key);
   if (!slice) return EMPTY_SNAPSHOT;
@@ -2395,6 +2447,7 @@ export function useChannelChat(channel: string | null | undefined): ChannelChatS
     clearedUserContexts: slice.clearedUserContexts,
     liveMessageCount: slice.liveMessageCount,
     pinnedMessage: slice.pinnedMessage,
+    renderToken,
   };
 }
 

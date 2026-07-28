@@ -238,6 +238,9 @@ export function useVodReplaySnapshot() {
       roomState: { ...EMPTY_ROOM_STATE },
       userBadges: null,
       liveMessageCount: version,
+      // Re-render signal for the memoized message list, same contract as
+      // ChannelChatSnapshot.renderToken. The replay tick bumps `version`.
+      renderToken: version,
     }),
     [messages, version, error],
   );

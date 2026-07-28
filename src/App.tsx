@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore, type WhisperImportProgress, type SettingsTab } from './stores/AppStore';
 import { useContextMenuStore } from './stores/contextMenuStore';
 import { listenForSettingsUpdates } from './utils/settingsBroadcast';
@@ -104,7 +105,31 @@ function App() {
       unlistenSnippets?.();
     };
   }, []);
-  const { loadSettings, chatPlacement, isLoading, isBooting, streamUrl, currentMediaType, checkAuthStatus, addToast, showBadgesOverlay, setShowBadgesOverlay, badgesOverlayInitialPaintId, badgesOverlayInitialBadgeId, badgesOverlayInitialStreamNook, badgesOverlayInitialTarget, showWhispersOverlay, setShowWhispersOverlay, settings, updateSettings, isTheaterMode, isHomeActive, loadActiveDropsCache, profileModalUser, setProfileModalUser, openSettings } = useAppStore();
+  // Actions are stable for the store's lifetime, so read them without
+  // subscribing. State goes through a shallow-compared selector. Previously this
+  // was a bare `useAppStore()`, i.e. a subscription to the ENTIRE store — so
+  // every toast, every mod-log entry (which fires on the IRC hot path) and every
+  // 30s drops poll re-rendered the root and the whole tree under it.
+  const { loadSettings, checkAuthStatus, addToast, setShowBadgesOverlay, setShowWhispersOverlay, updateSettings, loadActiveDropsCache, setProfileModalUser, openSettings } = useAppStore.getState();
+  const { chatPlacement, isLoading, isBooting, streamUrl, currentMediaType, showBadgesOverlay, badgesOverlayInitialPaintId, badgesOverlayInitialBadgeId, badgesOverlayInitialStreamNook, badgesOverlayInitialTarget, showWhispersOverlay, settings, isTheaterMode, isHomeActive, profileModalUser } = useAppStore(
+    useShallow((s) => ({
+      chatPlacement: s.chatPlacement,
+      isLoading: s.isLoading,
+      isBooting: s.isBooting,
+      streamUrl: s.streamUrl,
+      currentMediaType: s.currentMediaType,
+      showBadgesOverlay: s.showBadgesOverlay,
+      badgesOverlayInitialPaintId: s.badgesOverlayInitialPaintId,
+      badgesOverlayInitialBadgeId: s.badgesOverlayInitialBadgeId,
+      badgesOverlayInitialStreamNook: s.badgesOverlayInitialStreamNook,
+      badgesOverlayInitialTarget: s.badgesOverlayInitialTarget,
+      showWhispersOverlay: s.showWhispersOverlay,
+      settings: s.settings,
+      isTheaterMode: s.isTheaterMode,
+      isHomeActive: s.isHomeActive,
+      profileModalUser: s.profileModalUser,
+    })),
+  );
   // Channels owned by StreamNook MultiChat popouts. When the currently-watched
   // channel is in here, the in-app chat panel collapses so the popout becomes
   // the sole chat surface — no duplicate chat across windows.
@@ -146,7 +171,9 @@ function App() {
     if (!autoHideActive) setChatRevealed(false);
     return () => { if (chatRevealTimer.current) window.clearTimeout(chatRevealTimer.current); };
   }, [autoHideActive]);
-  const { isMultiNookActive, isChatHidden, slots } = usemultiNookStore();
+  const isMultiNookActive = usemultiNookStore((s) => s.isMultiNookActive);
+  const isChatHidden = usemultiNookStore((s) => s.isChatHidden);
+  const slots = usemultiNookStore((s) => s.slots);
   const visibleSlotsLength = slots.filter((s) => !s.isMinimized).length;
   const [isResizing, setIsResizing] = useState(false);
   const [isResizingModLogs, setIsResizingModLogs] = useState(false);
@@ -819,8 +846,8 @@ function App() {
     // the theme is (re)applied as well as when the slider itself changes.
     applyGlassStrength(settings.glass_transparency ?? DEFAULT_GLASS_TRANSPARENCY);
     // Interface font is also palette-independent; re-assert alongside the theme.
-    applyFont(settings.font ?? DEFAULT_FONT_ID);
-  }, [settings.theme, settings.custom_themes, settings.glass_transparency, settings.font, settings.oled_accent]);
+    applyFont(settings.font ?? DEFAULT_FONT_ID, settings.font_custom);
+  }, [settings.theme, settings.custom_themes, settings.glass_transparency, settings.font, settings.font_custom, settings.oled_accent]);
 
   // Check if we need to show the first-time setup wizard. Drive purely off
   // setup_complete: if it's false, show the wizard. (Gate on `quality` only as a
