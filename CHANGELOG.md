@@ -1,3 +1,10 @@
+## [8.3.10] - 2026-07-28
+
+### 🐛 Bug Fixes
+- Cosmetics that belong to another slot, like the Cologne Medallion, no longer take over your StreamNook badge in chat. If one had replaced your badge, it comes back on its own with nothing for you to do.
+- Badge drop times now read in your own timezone instead of as a raw UTC timestamp, in the toast, the desktop notification and the notification list alike.
+- A badge notification that arrived as "Coming soon" updates itself to "Now available" once the window opens, rather than sitting there stale.
+
 ## [8.3.9] - 2026-07-28
 
 ## 🎉 Big update rolling through
