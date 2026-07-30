@@ -1035,14 +1035,14 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
     section: 'Moltorino',
     sectionId: 'settings-section-moltorino',
     title: 'Moltorino',
-    description: 'Open chat in Moltorino, an external Twitch chat client you install yourself. Chatterino fork, third-party chat, separate window, external app, launch.'
+    description: 'Open chat in Moltorino, a Chatterino-style Twitch chat client that ships with StreamNook. Chatterino fork, third-party chat, separate window, bundled, built-in, launch.'
   },
   {
     tab: 'Integrations',
     section: 'Moltorino',
     sectionId: 'settings-section-moltorino',
-    title: 'Moltorino application',
-    description: 'Set the Moltorino executable path on this PC. Browse for Moltorino.exe, exe location, verify install, external chat client.'
+    title: 'Custom Moltorino path (advanced)',
+    description: 'Override the bundled Moltorino with your own install. Leave empty to use the copy that ships with StreamNook. Browse for Moltorino7.exe, exe location, runtime status, custom path.'
   },
   {
     tab: 'Integrations',

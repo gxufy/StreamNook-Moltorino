@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Plug, MessagesSquare, Loader2, Check, AlertCircle } from 'lucide-react';
 import { useAppStore } from '../../stores/AppStore';
@@ -11,6 +11,16 @@ import { Logger } from '../../utils/logger';
 interface MoltorinoPathInfo {
   resolved_path: string;
   file_name: string;
+}
+
+/** What `moltorino_runtime_status` reports (mirrors MoltorinoRuntimeStatus). This
+ *  is the source of truth for which executable will actually run: an empty custom
+ *  path does NOT imply the bundle is present — only the backend resolver knows. */
+interface MoltorinoRuntimeStatus {
+  available: boolean;
+  source: 'custom' | 'bundled' | null;
+  executable_path: string | null;
+  error: string | null;
 }
 
 // Module scope, not inside the render body: a nested component definition gets a
@@ -44,9 +54,30 @@ const IntegrationsSettings = () => {
   const [pathInput, setPathInput] = useState(storedPath);
   const [checking, setChecking] = useState(false);
   const [check, setCheck] = useState<{ ok: boolean; message: string } | null>(null);
+  // Which runtime the backend would actually use (bundled vs custom), or the
+  // not-found reason. This is the source of truth for the status line — the empty
+  // path field no longer implies "unavailable", because a bundled copy may exist.
+  const [runtime, setRuntime] = useState<MoltorinoRuntimeStatus | null>(null);
 
   const setMoltorino = (patch: Partial<typeof moltorino>) =>
     updateSettings({ ...settings, moltorino: { ...moltorino, ...patch } });
+
+  // Ask the backend which runtime it would launch. Read-only (never spawns
+  // Moltorino); safe to call on mount and after the saved path changes.
+  const refreshRuntime = useCallback(() => {
+    let alive = true;
+    invoke<MoltorinoRuntimeStatus>('moltorino_runtime_status')
+      .then((status) => {
+        if (alive) setRuntime(status);
+      })
+      .catch((e) => {
+        if (alive)
+          setRuntime({ available: false, source: null, executable_path: null, error: String(e) });
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // Validate whatever is already saved when the tab opens, so a returning user
   // sees the confirmed exe name instead of an unlabeled path. Also re-seeds the
@@ -69,6 +100,12 @@ const IntegrationsSettings = () => {
       alive = false;
     };
   }, [storedPath]);
+
+  // Refresh the runtime status on mount and whenever the saved path changes, so
+  // the status line reflects the value actually persisted (and thus what the
+  // resolver would pick) — clearing the field flips it to the bundled state, and
+  // setting a valid custom path flips it to custom, without a manual reload.
+  useEffect(() => refreshRuntime(), [storedPath, refreshRuntime]);
 
   // Save + validate in one step so the feedback always describes the value that
   // is actually persisted. An invalid path is still saved (so it isn't lost and
@@ -175,16 +212,43 @@ const IntegrationsSettings = () => {
             <div className="min-w-0 flex-1">
               <div className="text-[14px] font-semibold text-textPrimary">Moltorino</div>
               <p className="mt-0.5 text-[12px] leading-relaxed text-textSecondary">
-                Open a Twitch channel's chat in Moltorino, a separate chat client you install
-                yourself. StreamNook only launches it &mdash; native chat keeps running as normal.
+                Open a Twitch channel's chat in Moltorino, a Chatterino-style chat client that ships
+                with StreamNook. Native chat keeps running as normal.
               </p>
             </div>
           </div>
 
           <div className="mt-3.5 space-y-2.5 border-t border-white/[0.06] pt-3.5">
+            {/* Runtime status — the backend resolver is the source of truth for
+                which executable actually runs. An empty custom path means "use the
+                bundled copy", so we never infer availability from the field alone. */}
+            {runtime && (
+              <div
+                className={`flex items-start gap-1.5 text-[12px] leading-relaxed ${
+                  runtime.available ? 'text-emerald-400' : 'text-red-400'
+                }`}
+              >
+                {runtime.available ? (
+                  <Check className="mt-[1px] h-3 w-3 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="mt-[1px] h-3 w-3 flex-shrink-0" />
+                )}
+                <span className="min-w-0 break-words">
+                  {runtime.available
+                    ? runtime.source === 'custom'
+                      ? 'Using custom Moltorino'
+                      : 'Using bundled Moltorino'
+                    : 'Moltorino runtime not found'}
+                  {runtime.executable_path && (
+                    <span className="text-textMuted"> — {runtime.executable_path}</span>
+                  )}
+                </span>
+              </div>
+            )}
+
             <div>
               <div className="mb-1.5 text-[12px] font-medium text-textPrimary">
-                Moltorino application
+                Custom Moltorino path (advanced)
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -196,8 +260,8 @@ const IntegrationsSettings = () => {
                     if (e.key === 'Enter') commitPath(pathInput);
                   }}
                   spellCheck={false}
-                  placeholder="C:\Program Files\Moltorino\moltorino.exe"
-                  aria-label="Moltorino executable path"
+                  placeholder="Leave empty to use the bundled Moltorino"
+                  aria-label="Custom Moltorino executable path (advanced)"
                   className="glass-input min-w-0 flex-1 rounded-md px-3 py-1.5 text-[13px] text-textPrimary"
                 />
                 <button
@@ -232,9 +296,10 @@ const IntegrationsSettings = () => {
               )}
               {!checking && !check && (
                 <p className="mt-1.5 text-[12px] leading-relaxed text-textMuted">
-                  Pick Moltorino's .exe on this PC. Install it separately from StreamNook; this
-                  setting stays out of portable settings backups because the path is specific to
-                  this machine.
+                  Leave this empty to use the Moltorino that ships with StreamNook. Set a path only
+                  to override it with your own install &mdash; it wins over the bundled copy. This
+                  setting stays out of portable settings backups because the path is specific to this
+                  machine.
                 </p>
               )}
             </div>
@@ -244,7 +309,7 @@ const IntegrationsSettings = () => {
                 <div className="text-[12px] font-medium text-textPrimary">Show chat button</div>
                 <p className="mt-0.5 text-[12px] leading-relaxed text-textSecondary">
                   Add an "Open chat in Moltorino" button next to Pop out chat in the Twitch chat
-                  header. Needs a working path above.
+                  header. Needs a working Moltorino runtime (bundled or custom).
                 </p>
               </div>
               <Toggle
@@ -256,7 +321,7 @@ const IntegrationsSettings = () => {
             {/* Phase 2: embed Moltorino inside the main chat area instead of
                 launching it in a separate window. Native chat stays the default
                 (and the universal fallback for VODs, non-Twitch, offline chat,
-                and any embedding failure). Windows-only; needs a working path. */}
+                and any embedding failure). Windows-only; needs a working runtime. */}
             <div className="flex items-start justify-between gap-4 pt-0.5">
               <div className="min-w-0 flex-1">
                 <div className="text-[12px] font-medium text-textPrimary">Embed chat in StreamNook</div>
