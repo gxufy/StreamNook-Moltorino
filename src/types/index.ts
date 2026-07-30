@@ -98,6 +98,7 @@ export interface ChatLoggingSettings {
 export interface MoltorinoSettings {
   executable_path?: string; // Absolute path to the user's Moltorino .exe; unset = integration inert
   show_chat_button?: boolean; // Show "Open chat in Moltorino" in the chat header (default: false)
+  embedded_chat?: boolean; // Phase 2: embed Moltorino in the main chat area instead of native chat (default: false)
 }
 
 export interface DropsSettings {

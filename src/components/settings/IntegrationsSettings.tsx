@@ -252,6 +252,25 @@ const IntegrationsSettings = () => {
                 onChange={() => setMoltorino({ show_chat_button: !(moltorino.show_chat_button ?? false) })}
               />
             </div>
+
+            {/* Phase 2: embed Moltorino inside the main chat area instead of
+                launching it in a separate window. Native chat stays the default
+                (and the universal fallback for VODs, non-Twitch, offline chat,
+                and any embedding failure). Windows-only; needs a working path. */}
+            <div className="flex items-start justify-between gap-4 pt-0.5">
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-medium text-textPrimary">Embed chat in StreamNook</div>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-textSecondary">
+                  Show Moltorino inside the main chat panel instead of a separate window, following
+                  the channel you're watching. Windows only. Native chat takes over automatically for
+                  VODs, non-Twitch channels, and anything Moltorino can't show.
+                </p>
+              </div>
+              <Toggle
+                enabled={moltorino.embedded_chat ?? false}
+                onChange={() => setMoltorino({ embedded_chat: !(moltorino.embedded_chat ?? false) })}
+              />
+            </div>
           </div>
         </div>
 

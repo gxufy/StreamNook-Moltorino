@@ -1053,6 +1053,13 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   },
   {
     tab: 'Integrations',
+    section: 'Moltorino',
+    sectionId: 'settings-section-moltorino',
+    title: 'Embed chat in StreamNook',
+    description: 'Embed Moltorino inside the main chat panel instead of a separate window, following the channel you watch. Windows only. Native chat takes over for VODs, non-Twitch, and offline chat. Inline, docked, integrated chat.'
+  },
+  {
+    tab: 'Integrations',
     section: 'Ad Blocking',
     title: 'Ad Blocking',
     description: 'Block Twitch ads with the ad blocker plugin. Ad-free, TTV LOL, proxy, splice. Plugin integration panels appear here once installed.'
