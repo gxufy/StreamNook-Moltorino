@@ -1150,6 +1150,7 @@ fn main() {
             // Moltorino integration (optional external chat client)
             validate_moltorino_path,
             launch_moltorino,
+            moltorino_runtime_status,
             // Moltorino embedded chat (Phase 2): Win32-hosted chat surface
             moltorino_embed_start,
             moltorino_embed_set_bounds,

@@ -175,7 +175,9 @@ pub fn clip_hole_to_webview(
 #[cfg(windows)]
 mod imp {
     use super::{build_set_channel_json, parse_created_window};
-    use crate::commands::moltorino::{display_path, is_valid_twitch_login, resolve_executable};
+    use crate::commands::moltorino::{
+        display_path, is_valid_twitch_login, resolve_moltorino_runtime,
+    };
     use std::ffi::c_void;
     use std::path::Path;
     use std::sync::atomic::{AtomicIsize, Ordering};
@@ -1180,7 +1182,17 @@ mod imp {
         if !is_valid_twitch_login(&channel) {
             return Err(format!("\"{channel}\" isn't a valid Twitch channel name."));
         }
-        let exe = resolve_executable(exe_path)?;
+        // Shared runtime picker: a valid configured override wins, else the copy
+        // bundled beside StreamNook, else a clear not-found error (surfaced to the
+        // UI as a native-chat fallback). Resolving before we touch the embed lock
+        // keeps a bad path from ever creating a host window.
+        let runtime = resolve_moltorino_runtime(exe_path)?;
+        log::debug!(
+            "[Moltorino] embed runtime resolved: source={} path={}",
+            runtime.source.as_status(),
+            display_path(&runtime.path)
+        );
+        let exe = runtime.path;
 
         let mut guard = embed()
             .lock()
