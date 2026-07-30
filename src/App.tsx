@@ -11,7 +11,7 @@ import TitleBar from './components/TitleBar';
 import DynamicIsland from './components/DynamicIsland';
 import VideoPlayer from './components/VideoPlayer';
 import ChannelAboutReveal from './components/ChannelAboutReveal';
-import ChatWidget from './components/ChatWidget';
+import ChatSurface from './components/chat/ChatSurface';
 import { ModLogsWidget } from './components/chat/ModLogsWidget';
 import Home from './components/Home';
 import SettingsDialog from './components/SettingsDialog';
@@ -1743,7 +1743,7 @@ function App() {
                             {isMultiNookActive && <MultiNookChatSwitcher />}
                             <div className="flex-1 overflow-hidden relative">
                               <ErrorBoundary componentName="Chat" reportToLogService resetKeys={[streamUrl, currentMediaType]}>
-                                <ChatWidget />
+                                <ChatSurface />
                               </ErrorBoundary>
                             </div>
                           </div>
@@ -1800,7 +1800,7 @@ function App() {
                         {isMultiNookActive && <MultiNookChatSwitcher />}
                         <div className="flex-1 overflow-hidden relative">
                           <ErrorBoundary componentName="Chat" reportToLogService resetKeys={[streamUrl, currentMediaType]}>
-                            <ChatWidget />
+                            <ChatSurface />
                           </ErrorBoundary>
                         </div>
                       </div>
