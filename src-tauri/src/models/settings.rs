@@ -166,6 +166,12 @@ pub struct MoltorinoSettings {
     /// stays the default with no new UI until the user asks for it.
     #[serde(default)]
     pub show_chat_button: bool,
+    /// Phase 2: use Moltorino *embedded* in the main chat area instead of the
+    /// native chat panel. Defaults to false so native chat stays the default and
+    /// old settings.json files (which lack this key) load unchanged. Inert unless
+    /// `executable_path` points at a working Moltorino.
+    #[serde(default)]
+    pub embedded_chat: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

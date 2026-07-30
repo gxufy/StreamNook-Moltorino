@@ -31,13 +31,11 @@ use commands::{
     badges::*, cache::*, channel_panels::*, chat::*, chat_identity::*, components::*,
     cosmetics_cache::*, diagnostic_logging::*, discord::*, drops::*, emoji::*, emote_prefetch::*,
     emotes::*, eventsub::*, ffz::*, hype_train::*, identity::*, justlog::*, layout::*,
-    link_preview::*, logs::*, mod_log_storage::*, modroom::*, moltorino::*, multi_nook::*,
-    plugins::*,
-    profile_cache::*,
-    resub::*, screen_capture::*, session::*, settings::*, seventv::*, seventv_cosmetics::*,
-    seventv_cosmetics_fetch::*, song_id::*, streaming::*, subscriptions::*, twitch::*,
-    universal_cache::*,
-    user_profile::*, watch_streak::*, whisper_storage::*,
+    link_preview::*, logs::*, mod_log_storage::*, modroom::*, moltorino::*, moltorino_embed::*,
+    multi_nook::*, plugins::*, profile_cache::*, resub::*, screen_capture::*, session::*,
+    settings::*, seventv::*, seventv_cosmetics::*, seventv_cosmetics_fetch::*, song_id::*,
+    streaming::*, subscriptions::*, twitch::*, universal_cache::*, user_profile::*,
+    watch_streak::*, whisper_storage::*,
 };
 use log::{debug, error};
 use models::settings::{AppState, Settings};
@@ -137,12 +135,12 @@ fn show_main_window(app: &tauri::AppHandle) {
     };
     match tauri::WebviewWindowBuilder::new(app, "main", app_url)
         .title("StreamNook")
-    .inner_size(1600.0, 1000.0)
-    .min_inner_size(800.0, 600.0)
-    .center()
-    .resizable(true)
-    .decorations(false)
-    .build()
+        .inner_size(1600.0, 1000.0)
+        .min_inner_size(800.0, 600.0)
+        .center()
+        .resizable(true)
+        .decorations(false)
+        .build()
     {
         Ok(win) => {
             debug!("[Main] Recreated main window on demand");
@@ -1152,6 +1150,11 @@ fn main() {
             // Moltorino integration (optional external chat client)
             validate_moltorino_path,
             launch_moltorino,
+            // Moltorino embedded chat (Phase 2): Win32-hosted chat surface
+            moltorino_embed_start,
+            moltorino_embed_set_bounds,
+            moltorino_embed_set_channel,
+            moltorino_embed_stop,
         ])
         // Window-event handler. Two behaviors:
         //
@@ -1248,6 +1251,10 @@ fn main() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
+                // Tear down the embedded Moltorino host (kills only the process
+                // and destroys only the window StreamNook created) so shutdown
+                // never leaves an orphaned Moltorino behind. No-op if never used.
+                let _ = commands::moltorino_embed::moltorino_embed_stop_sync();
                 // Ask running plugin processes to shut down before the app
                 // process dies, waiting briefly so well-behaved plugins exit
                 // gracefully (stragglers are killed with the supervisor).

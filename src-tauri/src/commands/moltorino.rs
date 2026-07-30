@@ -29,7 +29,7 @@ pub struct MoltorinoPathInfo {
 /// drift from the intended character class. This runs *before* the value reaches
 /// the argument vector, which (together with `Command`'s argv-based spawn) is why
 /// no shell metacharacter can ever be interpreted.
-fn is_valid_twitch_login(channel: &str) -> bool {
+pub(crate) fn is_valid_twitch_login(channel: &str) -> bool {
     !channel.is_empty()
         && channel.len() <= 25
         && channel
@@ -41,7 +41,7 @@ fn is_valid_twitch_login(channel: &str) -> bool {
 /// returns that form on Windows, and showing it in the settings card or an error
 /// message reads as a glitch to users who only recognize `C:\...`. Spawning still
 /// uses the untouched canonical path — this is display-only.
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     let s = path.to_string_lossy();
     // UNC shares canonicalize to `\\?\UNC\server\share`; restore the `\\server\`
     // form rather than leaving a half-stripped path.
@@ -53,21 +53,20 @@ fn display_path(path: &Path) -> String {
 
 /// Shared path validation for both commands. Returns the canonicalized path or a
 /// user-facing error explaining exactly which check failed.
-fn resolve_executable(raw: &str) -> Result<PathBuf, String> {
+pub(crate) fn resolve_executable(raw: &str) -> Result<PathBuf, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
-        return Err("No Moltorino executable is set. Choose Moltorino.exe in Settings → Integrations.".to_string());
+        return Err(
+            "No Moltorino executable is set. Choose Moltorino.exe in Settings → Integrations."
+                .to_string(),
+        );
     }
 
     // Canonicalize first: it resolves relative segments and symlinks, and its
     // failure is also our not-found signal, so one syscall covers both.
     let path = Path::new(trimmed);
-    let canonical = std::fs::canonicalize(path).map_err(|e| {
-        format!(
-            "Can't find that file: {} ({})",
-            trimmed, e
-        )
-    })?;
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|e| format!("Can't find that file: {} ({})", trimmed, e))?;
 
     if canonical.is_dir() {
         return Err(format!(
@@ -143,9 +142,7 @@ pub async fn launch_moltorino(
     };
     // An explicitly-passed blank is treated as "not supplied" rather than an
     // error, so a caller that always sends the field still gets the saved path.
-    let raw = path
-        .filter(|p| !p.trim().is_empty())
-        .unwrap_or(configured);
+    let raw = path.filter(|p| !p.trim().is_empty()).unwrap_or(configured);
 
     let channel = channel.trim().to_ascii_lowercase();
     if !is_valid_twitch_login(&channel) {
@@ -172,13 +169,7 @@ fn spawn_moltorino(exe: &Path, channel: &str) -> Result<(), String> {
         .creation_flags(0x0800_0000)
         .spawn()
         .map(|_| ())
-        .map_err(|e| {
-            format!(
-                "Couldn't start Moltorino at {}: {}",
-                display_path(exe),
-                e
-            )
-        })
+        .map_err(|e| format!("Couldn't start Moltorino at {}: {}", display_path(exe), e))
 }
 
 #[cfg(not(windows))]
