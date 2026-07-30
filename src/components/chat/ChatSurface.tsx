@@ -34,6 +34,7 @@ import {
   type FocusedChatTarget,
 } from '../../utils/focusedChatTarget';
 import { createDedupingDebouncer } from '../../utils/embedSyncDebounce';
+import { isMoltorinoEmbedCandidate } from '../../utils/moltorinoRuntimeGate';
 import { Logger } from '../../utils/logger';
 
 /// Delay before a resolved channel change is pushed to Moltorino. Long enough to
@@ -86,6 +87,36 @@ const ChatSurface = () => {
   const executablePath = useAppStore((s) => s.settings?.moltorino?.executable_path ?? '');
   const target = useFocusedChatTarget();
 
+  // Whether the backend resolver would actually find a launchable runtime
+  // (bundled or custom). This is the real availability signal — NOT whether the
+  // custom path field is filled in — because a bundled Moltorino ships with the
+  // app and works with the custom field left blank.
+  //
+  //   • `null`  -> status not yet loaded; treat as "not a candidate" so we never
+  //                launch prematurely and native chat stays on screen.
+  //   • `true`  -> resolver found a runtime; embedding may proceed.
+  //   • `false` -> no runtime; native chat, no host, no WebView cutout.
+  //
+  // Read-only command (never spawns Moltorino). Fetched once on mount and
+  // refreshed when the saved custom path changes, so an unavailable->available
+  // transition (e.g. the user points at a valid exe, or clears an invalid one so
+  // the bundle takes over) starts the embedded host without an app restart.
+  const [runtimeAvailable, setRuntimeAvailable] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    invoke<{ available: boolean }>('moltorino_runtime_status')
+      .then((status) => {
+        if (alive) setRuntimeAvailable(status.available);
+      })
+      .catch((err) => {
+        Logger.warn('[Moltorino] runtime status check failed:', err);
+        if (alive) setRuntimeAvailable(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [executablePath]);
+
   // The channel actually handed to the embedded host. Driven by the debouncer so
   // rapid switching collapses to the final channel; null means "nothing embeddable
   // right now" (render native).
@@ -96,11 +127,12 @@ const ChatSurface = () => {
   // embed on every bounds tick). Cleared whenever the resolved channel changes.
   const [failedChannel, setFailedChannel] = useState<string | null>(null);
 
-  // Whether the embedded surface is even a candidate: feature on + a path is set.
-  // (The path may still be invalid; the Rust `start` will reject and we fall back.
-  // We gate on non-empty here only to avoid spinning up the machinery for users
-  // who never configured Moltorino.)
-  const embedCandidate = embeddedEnabled && executablePath.trim().length > 0;
+  // Whether the embedded surface is even a candidate: feature on + the backend
+  // resolver reports a launchable runtime. We gate on real availability (not a
+  // non-empty custom path) so the bundled runtime works with the field blank.
+  // While status is still loading (`null`) this is false, so native chat stays up
+  // and we never spin up the host or a WebView cutout speculatively.
+  const embedCandidate = isMoltorinoEmbedCandidate(embeddedEnabled, runtimeAvailable);
 
   // One debouncer for the lifetime of the surface. It commits the resolved
   // channel (or null) into React state; dedup means an unchanged channel never

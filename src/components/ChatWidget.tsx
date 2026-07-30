@@ -100,6 +100,7 @@ import type { TwitchStream, HypeTrainData } from '../types';
 
 import { Logger } from '../utils/logger';
 import { useVisibleInterval } from '../utils/useVisibleInterval';
+import { canOpenInMoltorino as canOpenInMoltorinoGate } from '../utils/moltorinoRuntimeGate';
 
 // Channel Points hover tooltip — portalled to document.body to escape overflow-hidden
 const ChannelPointsTooltip = ({ anchorRef, customPointsIconUrl, customPointsName, isLoadingChannelPoints, channelPoints }: {
@@ -742,9 +743,33 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
 
   const settings = useAppStore((s) => s.settings);
 
+  // Whether the backend resolver reports a launchable Moltorino runtime (bundled
+  // or custom). This is the ONLY correct signal for offering the launch button:
+  // an empty custom path does not mean "unavailable" because a bundled copy may
+  // exist, and only Rust knows. Read-only status query (never spawns Moltorino).
+  // Fetched once on mount and re-fetched whenever the saved custom path changes,
+  // so clearing/setting the path flips availability without an app restart.
+  const moltorinoStoredPath = settings.moltorino?.executable_path ?? '';
+  const [moltorinoRuntimeAvailable, setMoltorinoRuntimeAvailable] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    invoke<{ available: boolean }>('moltorino_runtime_status')
+      .then((status) => {
+        if (alive) setMoltorinoRuntimeAvailable(status.available);
+      })
+      .catch(() => {
+        if (alive) setMoltorinoRuntimeAvailable(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [moltorinoStoredPath]);
+
   // Moltorino: whether to offer "Open chat in Moltorino" beside Pop out chat.
   // Deliberately narrow — this is the ONE normal, main, live Twitch chat panel:
-  //   • opt-in setting on, and an executable actually configured
+  //   • opt-in setting on, and the backend resolver reports a launchable runtime
+  //     (bundled or custom) — NOT merely a non-empty custom path, so the bundled
+  //     runtime enables the button with the custom field left blank
   //   • Twitch only (Moltorino speaks Twitch IRC; Kick/YouTube/TikTok can't work)
   //   • !channelOverride excludes every MultiChat popout pane AND MultiNook's
   //     synthesized active slot, so it can never show in either
@@ -753,15 +778,13 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
   //   • !isVodReplay / live media only: replay chat is historical, so launching a
   //     live external chat for it would be misleading
   // Whispers never mount ChatWidget at all, so they're excluded by construction.
-  const moltorinoPath = settings.moltorino?.executable_path?.trim() ?? '';
   const canOpenInMoltorino =
     isTwitch &&
     !channelOverride &&
     !isMultiNookActive &&
     !isVodReplay &&
     currentMediaType === 'live' &&
-    (settings.moltorino?.show_chat_button ?? false) &&
-    moltorinoPath.length > 0;
+    canOpenInMoltorinoGate(settings.moltorino?.show_chat_button ?? false, moltorinoRuntimeAvailable);
 
   // No-input channel-point redemptions (from Twitch's channel-wide community
   // points feed). Message-style and text-input rewards already surface in chat

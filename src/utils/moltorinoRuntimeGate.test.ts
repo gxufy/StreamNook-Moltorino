@@ -1,0 +1,70 @@
+// Run with: node --test src/utils/moltorinoRuntimeGate.test.ts
+//
+// Covers the pure availability gates for the Moltorino integration. Availability
+// is the backend resolver's `available` result — the source of truth — NOT any
+// executable-path string. These tests therefore never construct or mock a path;
+// they feed the resolved boolean|null status directly, exactly as the components
+// receive it from `moltorino_runtime_status`.
+
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+import { isMoltorinoEmbedCandidate, canOpenInMoltorino } from './moltorinoRuntimeGate.ts';
+
+// --- Embed candidate (embedded-chat surface) ---
+
+test('embedded enabled + bundled runtime available -> embed candidate true', () => {
+  assert.equal(isMoltorinoEmbedCandidate(true, true), true);
+});
+
+test('embedded enabled + runtime unavailable -> embed candidate false', () => {
+  assert.equal(isMoltorinoEmbedCandidate(true, false), false);
+});
+
+test('embedded enabled + status loading (null) -> embed candidate false', () => {
+  assert.equal(isMoltorinoEmbedCandidate(true, null), false);
+});
+
+test('embedded disabled + runtime available -> embed candidate false', () => {
+  assert.equal(isMoltorinoEmbedCandidate(false, true), false);
+});
+
+// --- Open-in-Moltorino button ---
+
+test('show-button enabled + bundled runtime available -> button available', () => {
+  assert.equal(canOpenInMoltorino(true, true), true);
+});
+
+test('show-button enabled + runtime unavailable -> button unavailable', () => {
+  assert.equal(canOpenInMoltorino(true, false), false);
+});
+
+test('show-button enabled + status loading (null) -> button unavailable', () => {
+  assert.equal(canOpenInMoltorino(true, null), false);
+});
+
+test('show-button disabled + runtime available -> button unavailable', () => {
+  assert.equal(canOpenInMoltorino(false, true), false);
+});
+
+// --- Availability abstracts away *why* the resolver said yes ---
+//
+// The resolver reports a single `available` boolean regardless of which source it
+// picked; the frontend gate must not care. These two cases assert that the exact
+// scenarios the bundled-runtime work was about — an invalid/blank custom override
+// that falls through to a present bundle — reach the gates as `available === true`
+// and therefore enable both features, with no path string ever involved.
+
+test('invalid custom override falling through to a valid bundle (available=true) enables both gates', () => {
+  // The backend resolver rejected the custom override but found the bundle, so it
+  // reports available=true. Both gates must open on that alone.
+  assert.equal(isMoltorinoEmbedCandidate(true, true), true);
+  assert.equal(canOpenInMoltorino(true, true), true);
+});
+
+test('empty custom path with a valid bundle (available=true) enables both gates', () => {
+  // The custom field is blank; the resolver still finds the bundled runtime and
+  // reports available=true. Both gates must open — no non-empty path required.
+  assert.equal(isMoltorinoEmbedCandidate(true, true), true);
+  assert.equal(canOpenInMoltorino(true, true), true);
+});
