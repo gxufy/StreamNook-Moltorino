@@ -30,6 +30,8 @@ import { Logger } from '../utils/logger';
 import { useAppStore } from './AppStore';
 import { useGiftBombStore, type GiftRecipient } from './giftBombStore';
 import { giftBombOriginOf, isGiftBombAnnouncement, isGiftBombChild } from '../utils/giftBombCollapse';
+import { useMessageRepeatStore, type RepeatParticipant } from './messageRepeatStore';
+import { normalizeForRepeat, isPrivilegedChatter } from '../utils/messageRepeat';
 import type { SongMatch } from '../utils/songId';
 
 // Hard caps borrowed from the prior single-channel hook. Keeping them as
@@ -221,6 +223,56 @@ const emoteSubscribers = new Map<string, Set<() => void>>();
 // (OverlayChat.collapseGiftBombs) via the shared matchers in giftBombCollapse.
 const announcedGiftBombOrigins = new Set<string>();
 const MAX_TRACKED_BOMB_ORIGINS = 200;
+
+// Open repeat runs per channel: normalized message text -> the run's anchor.
+// `pushSeq` is the value of that channel's push counter when the anchor landed,
+// so we can tell whether the anchor has since been trimmed out of the buffer
+// without scanning it. A run whose anchor is gone must not swallow later copies,
+// or they'd vanish with nothing on screen carrying their count.
+interface RepeatRun {
+  anchorId: string;
+  /** Last time a copy joined. Slides, so a sustained wave stays one run. */
+  atMs: number;
+  pushSeq: number;
+  /** Messages in the run, including the anchor. */
+  count: number;
+  participants: RepeatParticipant[];
+}
+const openRepeatRuns = new Map<string, Map<string, RepeatRun>>();
+// Monotonic count of messages pushed per channel. Only ever incremented and
+// compared, so wraparound isn't a practical concern.
+const channelPushSeq = new Map<string, number>();
+const MAX_OPEN_RUNS_PER_CHANNEL = 200;
+
+function pruneRepeatRuns(runs: Map<string, RepeatRun>, nowMs: number, windowMs: number): void {
+  for (const [key, run] of runs) {
+    if (nowMs - run.atMs > windowMs) runs.delete(key);
+  }
+  while (runs.size > MAX_OPEN_RUNS_PER_CHANNEL) {
+    const oldest = runs.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    runs.delete(oldest);
+  }
+}
+
+/** Whether the logged-in user moderates the channel this slice belongs to.
+ *  Reads the badges already cached on the slice, so it costs nothing. */
+function isModeratorOfSlice(slice: ChannelSlice): boolean {
+  const badges = slice.userBadges ?? slice.userBadgesFromIrc ?? '';
+  if (!badges) return false;
+  return /\bmoderator\/|\bbroadcaster\/|\bglobal_mod\//.test(badges);
+}
+
+/** Forget every open run for a channel (channel switch, disconnect, clear). */
+export function resetRepeatRuns(channelKey?: string): void {
+  if (channelKey) {
+    openRepeatRuns.delete(channelKey.toLowerCase());
+    channelPushSeq.delete(channelKey.toLowerCase());
+    return;
+  }
+  openRepeatRuns.clear();
+  channelPushSeq.clear();
+}
 
 // Extract the gift-bomb origin + recipient from a buffered message, if it is a
 // (non-suppressed, out-of-order) gift child. Raw-string rows and non-gift rows
@@ -1669,31 +1721,109 @@ function appendStructuredMessage(slice: ChannelSlice, parsed: any) {
     }
   }
 
+  // Repeat collapse: fold a run of the same message into the first one's
+  // counter. Cross-user by design — the noisy case is many people posting one
+  // thing, not one person repeating (Twitch already rejects that).
+  let repeatSuppressed = false;
+  if (slice.channel) {
+    // Counts every message that gets this far, events included, so the
+    // "has the anchor been trimmed yet" distance below can't undercount.
+    const chKey = slice.channel.toLowerCase();
+    const seq = (channelPushSeq.get(chKey) ?? 0) + 1;
+    channelPushSeq.set(chKey, seq);
+
+    const rp = useAppStore.getState().settings.message_repeat;
+    const mode = rp?.mode ?? 'collapse';
+    // Moderators need every message actionable, so runs stay expanded in
+    // channels they moderate unless they opt out.
+    const moderatingHere = (rp?.keep_all_when_moderator ?? true) && isModeratorOfSlice(slice);
+    const privileged = (rp?.exempt_privileged ?? true) && isPrivilegedChatter(parsed.badges);
+
+    if (
+      mode !== 'off' &&
+      !giftBombChildSuppressed &&
+      !parsed.metadata?.msg_type &&
+      !moderatingHere &&
+      !privileged
+    ) {
+      const key = normalizeForRepeat(parsed.content ?? '', rp?.match ?? 'normalized');
+      if (key) {
+        const windowMs = Math.max(1, rp?.window_seconds ?? 60) * 1000;
+        const now = Date.now();
+        let runs = openRepeatRuns.get(chKey);
+        if (!runs) {
+          runs = new Map();
+          openRepeatRuns.set(chKey, runs);
+        }
+        pruneRepeatRuns(runs, now, windowMs);
+
+        // The anchor has scrolled out once more than a full buffer's worth of
+        // messages have been pushed since it landed. A run whose anchor is gone
+        // must not swallow copies, or they'd disappear with nothing carrying
+        // their count.
+        const bufferCap = getActiveHistoryMax() + CHAT_BUFFER_SIZE;
+        const existing = runs.get(key);
+        const anchorLive = !!existing && seq - existing.pushSeq < bufferCap;
+
+        if (existing && anchorLive && now - existing.atMs <= windowMs) {
+          existing.count += 1;
+          existing.atMs = now;
+          if (existing.participants.length < 20) {
+            existing.participants.push({
+              userId: parsed.user_id,
+              displayName: parsed.display_name || parsed.username,
+            });
+          }
+          // Collapse folds the count onto the first row and hides this one.
+          // Label leaves every row on screen and numbers THIS one, so the
+          // chat reads x2, x3, x4 going down.
+          const rowId = mode === 'collapse' ? existing.anchorId : messageId;
+          useMessageRepeatStore
+            .getState()
+            .noteRun(rowId, existing.count, existing.participants);
+          repeatSuppressed = mode === 'collapse';
+        } else {
+          runs.set(key, {
+            anchorId: messageId,
+            atMs: now,
+            pushSeq: seq,
+            count: 1,
+            participants: [],
+          });
+        }
+      }
+    }
+  }
+
   // TikTok likes are high-frequency engagement, not conversation. Keep them OUT of
   // the chat feed (they'd bury real chat) but still feed the activity panel below
   // (the producer reads `parsed` directly, not the slice, so skipping the queue is
   // safe). Follows / gifts stay inline like every other platform's events.
   const activityOnly =
     (parsed.provider === 'tiktok' && parsed.metadata?.msg_type === 'tiktok_like') ||
-    giftBombChildSuppressed;
+    giftBombChildSuppressed ||
+    repeatSuppressed;
 
   if (!activityOnly) {
     queueMessage(slice.channel, parsed);
+  }
 
-    // Active /nuke future-window check. No-op if no nukes are armed for this
-    // channel. Fire-and-forget; nuke action errors are logged inside the engine.
-    if (slice.channel) {
-      withNukeEngine((mod) => {
-        void mod.checkActiveNukesForMessage(slice.channel, parsed);
-      });
-    }
+  // Side effects run on every real chat message, including copies that repeat
+  // collapse folded out of the view. A copypasta wave is exactly what /nuke
+  // targets, so hiding copies from the engine would leave it actioning only the
+  // first one; a keyword reminder should fire on a folded message too.
+  // Gift-bomb children and TikTok likes are events, not chat, so they stay out.
+  if (slice.channel && !giftBombChildSuppressed && parsed.metadata?.msg_type !== 'tiktok_like') {
+    // No-op if no nukes are armed for this channel. Fire-and-forget; nuke
+    // action errors are logged inside the engine.
+    withNukeEngine((mod) => {
+      void mod.checkActiveNukesForMessage(slice.channel, parsed);
+    });
 
-    // Keyword reminders. No-op unless a keyword reminder is scoped to this channel.
-    if (slice.channel) {
-      withReminderEngine((mod) => {
-        mod.checkRemindersForMessage(slice.channel, parsed);
-      });
-    }
+    // No-op unless a keyword reminder is scoped to this channel.
+    withReminderEngine((mod) => {
+      mod.checkRemindersForMessage(slice.channel, parsed);
+    });
   }
 
   // Mirror non-chat channel events (subs, gifts, ... and future follows/raids/
@@ -2014,6 +2144,8 @@ export async function releaseChannel(
   // its component-driven unsubscribe lifecycle.
   pendingByChannel.delete(key);
   emoteCache.delete(key);
+  // Open repeat runs point at message ids in the buffer we just dropped.
+  resetRepeatRuns(key);
   inflightEmoteFetches.delete(key);
   try {
     if (provider === 'twitch') {
