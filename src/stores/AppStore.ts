@@ -410,6 +410,7 @@ interface AppState {
   clearWhisperTargetUser: () => void;
   toggleTheaterMode: () => void;
   toggleWindowFullscreen: () => Promise<void>;
+  toggleKeepOnTop: () => Promise<void>;
   loginToTwitch: () => Promise<void>;
   logoutFromTwitch: () => Promise<void>;
   /** Make a linked account the main (watch & stream as it), then re-establish identity. */
@@ -2354,6 +2355,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch (err) {
       Logger.error('[Fullscreen] Failed to toggle window fullscreen:', err);
     }
+  },
+
+  toggleKeepOnTop: async () => {
+    const state = get();
+    const s = state.settings;
+    const next = s.keep_on_top_in_compact !== true;
+    // Only writes the preference. Applying it to the window is App.tsx's job,
+    // and it only takes effect while Compact View is active.
+    await state.updateSettings({ ...s, keep_on_top_in_compact: next });
+    trackActivity(next ? 'Pinned compact player on top' : 'Unpinned compact player');
   },
 
   loginToTwitch: async () => {

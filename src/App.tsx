@@ -58,6 +58,7 @@ import { applyModerateEvent } from './utils/applyModerateEvent';
 import { handleSeventvEmoteSetUpdate, handleSeventvCosmeticUpdate, type EmoteSetUpdatePayload, type CosmeticUpdatePayload } from './services/seventvEventApi';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
+import { getLogicalInnerSize, clampToWorkArea } from './utils/windowSizing';
 import { getThemeById, applyTheme, DEFAULT_THEME_ID, getThemeByIdWithCustom, applyGlassStrength, DEFAULT_GLASS_TRANSPARENCY, applyFont, DEFAULT_FONT_ID, OLED_THEME_ID, getOledTheme } from './themes';
 import { getSelectedCompactViewPreset } from './constants/compactViewPresets';
 
@@ -84,6 +85,28 @@ const V220_RELOGIN_MIGRATION_KEY = 'streamnook-relogin-v2.2.0';
 // Default sizes for different placements (outside component to avoid recreating on each render)
 const DEFAULT_CHAT_WIDTH = 402; // For 'right' placement
 const DEFAULT_CHAT_HEIGHT = 200; // For 'bottom' placement
+// Bumped to -v2 when the saved value switched from physical to logical pixels.
+// A stale physical value replayed as a LogicalSize would reopen the app oversized.
+const COMPACT_SAVED_SIZE_KEY = 'streamnook-compact-saved-size-v2';
+
+/** Window geometry captured on the way into Compact View. `maximized` is the
+ *  state the window was in, not a size: restoring a maximized window by pixel
+ *  size gives a floating window with maximized dimensions, not a maximized one. */
+type CompactSavedSize = { width: number; height: number; maximized?: boolean };
+
+/** Put the window back the way Compact View found it. Callers set the
+ *  self-resize guard first; this only touches geometry. */
+async function restoreFromCompact(
+  win: ReturnType<typeof getCurrentWindow>,
+  saved: CompactSavedSize,
+): Promise<void> {
+  if (saved.maximized) {
+    await win.maximize();
+    return;
+  }
+  const restored = await clampToWorkArea(saved.width, saved.height);
+  await win.setSize(new LogicalSize(restored.width, restored.height));
+}
 
 function App() {
   useCommandPaletteHotkey();
@@ -180,10 +203,12 @@ function App() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedBadge, setSelectedBadge] = useState<{ badge: BadgeVersion; setId: string } | null>(null);
   
-  // Persist savedWindowSize to localStorage so it survives app restarts
-  const [savedWindowSize, setSavedWindowSize] = useState<{ width: number; height: number } | null>(() => {
+  // Persist savedWindowSize to localStorage so it survives app restarts. The
+  // optional `maximized` flag is additive, so a stored value written before it
+  // existed still parses (missing = it wasn't maximized) and needs no key bump.
+  const [savedWindowSize, setSavedWindowSize] = useState<CompactSavedSize | null>(() => {
     try {
-      const stored = localStorage.getItem('streamnook-compact-saved-size');
+      const stored = localStorage.getItem(COMPACT_SAVED_SIZE_KEY);
       return stored ? JSON.parse(stored) : null;
     } catch {
       return null;
@@ -216,6 +241,13 @@ function App() {
   // authority during the transition instead of racing two other resizers that
   // use a non-preserving formula and collapse the window toward its minimum.
   const placementResizeInProgressRef = useRef(false);
+  // Deadline after our own setSize during which the resize listener stands down.
+  // A resize we performed must never be read back as user input: the aspect formula's
+  // constant offsets (title bar, gaps) don't scale, so a clamped or rounded write can
+  // disagree with the formula by a pixel or two and ping-pong. This also closes the
+  // gap in placementResizeInProgressRef, which is cleared in a finally block before
+  // the resize event it caused has been delivered.
+  const selfResizeUntilRef = useRef(0);
   // When the current channel's chat is owned by a MultiChat popout, main's
   // chat panel JSX is gone — the video player container expands to fill the
   // freed width, but stays 16:9 so the user sees side black bars. The
@@ -254,9 +286,15 @@ function App() {
       const currentStreamUrl = streamUrlRef.current;
       const currentIsMultiNookActive = isMultiNookActiveRef.current;
 
-      // Skip if in theater mode - compact view handles its own sizing
-      if (isTheaterMode) {
-        Logger.debug('[ChatSize] Skipping resize - theater/compact mode is active');
+      // Skip while compact is active AND on the transition out of it. Leaving
+      // Compact View flips isTheaterMode and chatPlacement in one store update,
+      // so this handler and the compact effect would both resize the window and
+      // race; whichever landed last won, which is how a maximized window came
+      // back un-maximized. The compact effect owns geometry in both directions.
+      // isTheaterModeRef still holds the pre-toggle value here (a later effect
+      // syncs it), so a truthy ref with isTheaterMode false means "just exited".
+      if (isTheaterMode || isTheaterModeRef.current) {
+        Logger.debug('[ChatSize] Skipping resize - compact view owns this transition');
         prevChatPlacementRef.current = chatPlacement;
         prevChatSizeRef.current = newSize;
         return;
@@ -279,7 +317,18 @@ function App() {
             return;
           }
 
-          const size = await window.innerSize();
+          // Same for OS fullscreen — resizing there fights the fullscreen rect.
+          const isFullscreen = await window.isFullscreen();
+          if (isFullscreen) {
+            Logger.debug('[ChatSize] Window is fullscreen, skipping resize');
+            prevChatPlacementRef.current = chatPlacement;
+            prevChatSizeRef.current = newSize;
+            return;
+          }
+
+          // Logical pixels: the offsets below are all CSS pixels, so the window size
+          // has to be converted out of physical device pixels before mixing them.
+          const size = await getLogicalInnerSize(window);
           const titleBarHeight = 40;
 
           Logger.debug('[ChatSize] Calculating window size to preserve video dimensions');
@@ -331,8 +380,10 @@ function App() {
 
           Logger.debug('[ChatSize] New window size to preserve video:', newWidth, newHeight);
 
-          if (Math.abs(size.width - newWidth) > 5 || Math.abs(size.height - newHeight) > 5) {
-            await window.setSize(new LogicalSize(newWidth, newHeight));
+          const clamped = await clampToWorkArea(newWidth, newHeight);
+          if (Math.abs(size.width - clamped.width) > 5 || Math.abs(size.height - clamped.height) > 5) {
+            selfResizeUntilRef.current = Date.now() + 300;
+            await window.setSize(new LogicalSize(clamped.width, clamped.height));
           }
         } catch (error) {
           Logger.error('[ChatSize] Failed to resize window:', error);
@@ -1031,11 +1082,18 @@ function App() {
         if (isTheaterMode) {
           // Entering theater mode - save current size and resize to selected preset
           if (!savedWindowSize) {
-            const currentSize = await window.innerSize();
-            const sizeToSave = { width: currentSize.width, height: currentSize.height };
+            // Logical pixels, matching the LogicalSize this is restored with below.
+            const wasMaximized = await window.isMaximized();
+            const currentSize = await getLogicalInnerSize(window);
+            const sizeToSave = { width: currentSize.width, height: currentSize.height, maximized: wasMaximized };
             setSavedWindowSize(sizeToSave);
             // Persist to localStorage so it survives app restart
-            localStorage.setItem('streamnook-compact-saved-size', JSON.stringify(sizeToSave));
+            localStorage.setItem(COMPACT_SAVED_SIZE_KEY, JSON.stringify(sizeToSave));
+            // Resizing a still-maximized window leaves Windows thinking it's
+            // maximized, so the exit path restored pixel dimensions onto a
+            // window that never dropped the state. Leave maximized first, then
+            // shrink; exiting calls maximize() to put it back.
+            if (wasMaximized) await window.unmaximize();
           }
 
           // Get the selected compact view preset
@@ -1054,14 +1112,16 @@ function App() {
           const targetHeight = videoHeight + titleBarHeight;
 
           Logger.debug(`Entering compact view - resizing to: ${targetWidth}x${targetHeight} (${preset.name}, video: ${targetWidth}x${videoHeight})`);
+          selfResizeUntilRef.current = Date.now() + 300;
           await window.setSize(new LogicalSize(targetWidth, targetHeight));
         } else if (savedWindowSize) {
           // Exiting theater mode - restore previous size
-          Logger.debug('Exiting compact view - restoring to:', savedWindowSize.width, 'x', savedWindowSize.height);
-          await window.setSize(new LogicalSize(savedWindowSize.width, savedWindowSize.height));
+          Logger.debug('Exiting compact view - restoring to:', savedWindowSize.maximized ? 'maximized' : `${savedWindowSize.width}x${savedWindowSize.height}`);
+          selfResizeUntilRef.current = Date.now() + 300;
+          await restoreFromCompact(window, savedWindowSize);
           setSavedWindowSize(null);
           // Clear from localStorage
-          localStorage.removeItem('streamnook-compact-saved-size');
+          localStorage.removeItem(COMPACT_SAVED_SIZE_KEY);
         }
       } catch (error) {
         Logger.error('Failed to resize window for compact view:', error);
@@ -1072,6 +1132,18 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTheaterMode, streamUrl, settings.compact_view?.selectedPresetId]); // Re-run if preset changes while in compact view
 
+  // Keep-on-top, scoped to Compact View. The only place that calls
+  // setAlwaysOnTop for the main window: the store action just writes the
+  // setting. Runs on mount and on every Compact View entry/exit, so leaving
+  // compact always releases the window. Don't read isAlwaysOnTop() here — that
+  // command isn't in the capability allowlist, so the setting is the truth.
+  useEffect(() => {
+    const pinned = isTheaterMode && settings.keep_on_top_in_compact === true;
+    getCurrentWindow()
+      .setAlwaysOnTop(pinned)
+      .catch((err) => Logger.error('[Window] Failed to set always on top:', err));
+  }, [settings.keep_on_top_in_compact, isTheaterMode]);
+
   // On app startup, if we have a saved window size from a previous session where the app
   // closed while in compact view, restore it now (if not currently in theater mode)
   useEffect(() => {
@@ -1080,10 +1152,11 @@ function App() {
       if (savedWindowSize && !isTheaterMode) {
         try {
           const window = getCurrentWindow();
-          Logger.debug('Restoring window size from previous session:', savedWindowSize.width, 'x', savedWindowSize.height);
-          await window.setSize(new LogicalSize(savedWindowSize.width, savedWindowSize.height));
+          Logger.debug('Restoring window size from previous session:', savedWindowSize.maximized ? 'maximized' : `${savedWindowSize.width}x${savedWindowSize.height}`);
+          selfResizeUntilRef.current = Date.now() + 300;
+          await restoreFromCompact(window, savedWindowSize);
           setSavedWindowSize(null);
-          localStorage.removeItem('streamnook-compact-saved-size');
+          localStorage.removeItem(COMPACT_SAVED_SIZE_KEY);
         } catch (error) {
           Logger.error('Failed to restore window size:', error);
         }
@@ -1234,10 +1307,18 @@ function App() {
           return;
         }
 
-        // Get current window size using Tauri's API
-        const size = await window.innerSize();
-        const width = size.width;
-        const height = size.height;
+        // Same for OS fullscreen — resizing there fights the fullscreen rect.
+        const isFullscreen = await window.isFullscreen();
+        if (isFullscreen) {
+          Logger.debug('Window is fullscreen, skipping aspect ratio adjustment');
+          isAdjustingRef.current = false;
+          return;
+        }
+
+        // Logical pixels: innerSize() is physical, and every offset below is a CSS
+        // pixel. Mixing the two both skews the formula and, once written back as a
+        // LogicalSize, multiplies the window by the scale factor on every pass.
+        const { width, height } = await getLogicalInnerSize(window);
 
         Logger.debug('[AspectRatio] Current window size:', width, height);
         Logger.debug('[AspectRatio] Chat size:', currentChatSize);
@@ -1289,9 +1370,11 @@ function App() {
         Logger.debug('[AspectRatio] Calculated new size:', newWidth, newHeight);
 
         // Only resize if dimensions changed significantly (more than 5px difference)
-        if (Math.abs(width - newWidth) > 5 || Math.abs(height - newHeight) > 5) {
-          Logger.debug('[AspectRatio] Resizing window to:', newWidth, newHeight);
-          await window.setSize(new LogicalSize(newWidth, newHeight));
+        const clamped = await clampToWorkArea(newWidth, newHeight);
+        if (Math.abs(width - clamped.width) > 5 || Math.abs(height - clamped.height) > 5) {
+          Logger.debug('[AspectRatio] Resizing window to:', clamped.width, clamped.height);
+          selfResizeUntilRef.current = Date.now() + 300;
+          await window.setSize(new LogicalSize(clamped.width, clamped.height));
         } else {
           Logger.debug('[AspectRatio] Size difference too small, not resizing');
         }
@@ -1347,9 +1430,9 @@ function App() {
           return;
         }
 
-        const size = await window.innerSize();
-        const width = size.width;
-        const height = size.height;
+        // Logical pixels — see the settle effect above for why this conversion is
+        // what stops the window from growing on every resize event.
+        const { width, height } = await getLogicalInnerSize(window);
 
         const titleBarHeight = 40;
 
@@ -1392,9 +1475,11 @@ function App() {
           uiHeightOffset: uiHeightOffset,
         });
 
-        if (Math.abs(width - newWidth) > 5 || Math.abs(height - newHeight) > 5) {
-          Logger.debug('[AspectRatio] Resize event - adjusting to:', newWidth, newHeight);
-          await window.setSize(new LogicalSize(newWidth, newHeight));
+        const clamped = await clampToWorkArea(newWidth, newHeight);
+        if (Math.abs(width - clamped.width) > 5 || Math.abs(height - clamped.height) > 5) {
+          Logger.debug('[AspectRatio] Resize event - adjusting to:', clamped.width, clamped.height);
+          selfResizeUntilRef.current = Date.now() + 300;
+          await window.setSize(new LogicalSize(clamped.width, clamped.height));
         }
       } catch (error) {
         Logger.error('Failed to adjust window for aspect ratio:', error);
@@ -1412,6 +1497,8 @@ function App() {
           clearTimeout(debounceTimeout);
         }
         debounceTimeout = setTimeout(async () => {
+          // Never react to a resize we performed ourselves.
+          if (Date.now() < selfResizeUntilRef.current) return;
           // Check refs for current state
           if (aspectRatioLockEnabledRef.current && !isTheaterModeRef.current && (streamUrlRef.current || isMultiNookActiveRef.current)) {
             await adjustWindowForAspectRatio();
