@@ -244,6 +244,21 @@ function buildQuickActions(): PaletteItem[] {
       run: () => useAppStore.getState().toggleWindowFullscreen(),
     },
     {
+      id: 'window.toggleKeepOnTop',
+      section: 'Quick Actions',
+      title: 'Keep compact player on top',
+      subtitle: 'Float the Compact View player above other apps',
+      keywords: 'always on top pin float above stay in front behind browser buried cover overlay compact mini player',
+      run: () => {
+        const state = useAppStore.getState();
+        if (!state.isTheaterMode) {
+          state.addToast('Enter Compact View first', 'warning');
+          return;
+        }
+        return state.toggleKeepOnTop();
+      },
+    },
+    {
       id: 'qa.goHome',
       section: 'Quick Actions',
       title: 'Go to Home',
@@ -780,6 +795,7 @@ const SETTINGS_CATALOG: SettingsEntry[] = [
   { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', keywords: 'chat events live activity overlay show hide toggle turn off in chat' },
   { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Polls', keywords: 'polls poll vote voting live poll overlay chat event show hide toggle turn off' },
   { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Predictions', keywords: 'predictions prediction bet outcome channel points overlay chat event show hide toggle turn off' },
+  { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Poll and prediction order', keywords: 'poll prediction both at once same time overlap stack order priority which on top first card overlay position' },
   { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Channel Point Redemptions', keywords: 'channel point redemptions redeem reward no input chat row show hide toggle turn off' },
   { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Collapse gift-sub floods', keywords: 'gift subs gifted collapse flood mystery bomb community batch spam one liner recipients sub gift show hide toggle turn off' },
   { tab: 'Chat', section: 'Chat Logging', keywords: 'chat logging save logs text files folder per channel timestamps events moderation record history' },
@@ -787,9 +803,16 @@ const SETTINGS_CATALOG: SettingsEntry[] = [
   { tab: 'Chat', section: 'Link Previews', keywords: 'link preview previews load card url unfurl embed trusted sources shorten links domains clean' },
   { tab: 'Chat', section: 'Emotes', keywords: 'emotes emote size hover preview spacing inline scale 7tv bttv ffz' },
   { tab: 'Chat', section: 'Chat Input', keywords: 'chat input composer bypass duplicate message quick send ctrl enter keep message repeat' },
+  { tab: 'Chat', section: 'Chat Input', label: 'Hide the placeholder text', keywords: 'hide placeholder prompt send a message empty input box composer text grey ghost hint clean minimal' },
+  { tab: 'Chat', section: 'Chat Input', label: 'Hide the emote button', keywords: 'hide emote emoji button smiley face icon input box composer picker clean minimal remove' },
+  { tab: 'Chat', section: 'Chat Input', label: 'Hide the points balance', keywords: 'hide channel points balance number counter button input box composer clean minimal remove' },
   { tab: 'Chat', section: 'Emote Tab Completion', sectionId: 'settings-section-emote-tab-completion', keywords: 'emote tab completion autocomplete carousel kappa cycle shift starts contains match include chat users' },
-  { tab: 'Chat', section: 'Render Style', keywords: 'render style deleted messages strikethrough dimmed hidden shared chat paint mentions inline compact emote tooltips 7tv update notices smooth scroll resume message buffer scrollback ffz emote effects modifier wide flip rainbow shake frankerfacez' },
+  { tab: 'Chat', section: 'Render Style', keywords: 'render style deleted messages strikethrough dimmed hidden shared chat paint mentions inline compact emote tooltips 7tv update notices smooth scroll resume message buffer scrollback ffz emote effects modifier wide flip rainbow shake frankerfacez bttv betterttv emote modifiers cursed party rotate zero space' },
+  { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Start a poll or prediction', keywords: 'poll prediction create start new make run builder composer outcomes choices duration channel points vote bet broadcaster streamer' },
+  { tab: 'Chat', section: 'Repeated Messages', sectionId: 'settings-section-repeated-messages', keywords: 'repeated messages repeat counter duplicate copypasta spam wave combo collapse fold group x2 x3 x12 count same message emote flood dedupe condense' },
+  { tab: 'Chat', section: 'Repeated Messages', sectionId: 'settings-section-repeated-messages', label: 'Repeat counter colour and threshold', keywords: 'repeat counter colour color threshold window seconds sensitivity match exact nearly identical mods vips streamer exempt moderator' },
   { tab: 'Chat', section: 'User Cards', sectionId: 'settings-section-user-cards', keywords: 'user card profile popup click username open messages chat history first badges stats view default landing' },
+  { tab: 'Chat', section: 'User Cards', sectionId: 'settings-section-user-cards', label: 'User card details', keywords: 'user card fields rows details show hide joined twitch account age followage following since follows channels chatters chatter count past subscriber last live relative time how long ago 7tv profile link banned suspended' },
   { tab: 'Chat', section: '7TV Cosmetics', keywords: '7tv cosmetics paint drop shadows username paints shadow readability' },
   { tab: 'Chat', section: 'Highlight Appearance', keywords: 'highlight appearance display style tint opacity flash window title unfocused look' },
   { tab: 'Chat', section: 'Highlight Phrases', keywords: 'highlights phrases keywords alerts words names patterns flash match' },
@@ -802,6 +825,7 @@ const SETTINGS_CATALOG: SettingsEntry[] = [
 
   // Moderation
   { tab: 'Moderation', keywords: 'moderation mod ban timeout delete chat actions logs nuke purge mass visibility highlights' },
+  { tab: 'Moderation', section: 'Reasons', sectionId: 'settings-section-mod-reasons', label: 'Ban and nuke reasons', keywords: 'reason reasons ban timeout nuke saved preset prefill default text why mod view record note' },
   { tab: 'Moderation', section: 'Moderation Actions', keywords: 'moderation actions action style mod drag moderate grab buttons both ban timeout delete whisper profile buckets pin pinned message inline column bar above beside chat layout' },
   { tab: 'Moderation', section: 'Mod Rooms', keywords: 'mod rooms room private encrypted team chat consent connect disconnect connected account moderator backchannel' },
   { tab: 'Moderation', section: 'Mod Logs', keywords: 'mod logs panel recent moderation actions timeouts bans deletions sidebar' },
@@ -838,6 +862,8 @@ const SETTINGS_CATALOG: SettingsEntry[] = [
   { tab: 'Interface', keywords: 'interface sidebar motion animations settings window compact view chrome layout' },
   { tab: 'Interface', section: 'Sidebar', sectionId: 'settings-section-sidebar', keywords: 'sidebar nav navigation rail display mode expanded compact hidden disabled expand on hover recommended streams' },
   { tab: 'Interface', section: 'Motion', sectionId: 'settings-section-motion', keywords: 'motion animations reduce motion accessibility performance disable transitions full reduced off snappy' },
+  { tab: 'Interface', section: 'Closing the Window', sectionId: 'settings-section-window-close', label: 'Close button', keywords: 'close button minimize to tray system tray close to tray quit exit x button background keep running notification area popouts' },
+  { tab: 'Interface', section: 'Keep on Top', sectionId: 'settings-section-window-on-top', keywords: 'always on top pin keep window above float stay in front overlay floating player behind browser buried sinks disappears compact view mini player picture in picture alternative' },
   { tab: 'Interface', section: 'Settings Window', sectionId: 'settings-section-settings-window', keywords: 'settings window compact centered full page layout fills app' },
   { tab: 'Interface', section: 'Compact View', sectionId: 'settings-section-compact', keywords: 'compact view mini small window size second monitor preset' },
 
