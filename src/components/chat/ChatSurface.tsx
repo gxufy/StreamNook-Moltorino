@@ -85,6 +85,15 @@ function useFocusedChatTarget(): FocusedChatTarget {
 const ChatSurface = () => {
   const embeddedEnabled = useAppStore((s) => s.settings?.moltorino?.embedded_chat ?? false);
   const executablePath = useAppStore((s) => s.settings?.moltorino?.executable_path ?? '');
+  // The embedded chat is a native Win32 child window Rust overlays on the chat
+  // rectangle; it composites ABOVE the WebView, so a DOM overlay like the Settings
+  // dialog (fixed inset-0) can never cover it — Moltorino would draw straight
+  // through Settings. We therefore treat "Settings open" as "primary surface not
+  // visible" and drop the embed candidate, which unmounts the host and runs its
+  // teardown (hide native window + restore the WebView region). Closing Settings
+  // flips this back and the host remounts automatically.
+  const isSettingsOpen = useAppStore((s) => s.isSettingsOpen);
+  const surfaceVisible = !isSettingsOpen;
   const target = useFocusedChatTarget();
 
   // Whether the backend resolver would actually find a launchable runtime
@@ -128,11 +137,13 @@ const ChatSurface = () => {
   const [failedChannel, setFailedChannel] = useState<string | null>(null);
 
   // Whether the embedded surface is even a candidate: feature on + the backend
-  // resolver reports a launchable runtime. We gate on real availability (not a
-  // non-empty custom path) so the bundled runtime works with the field blank.
-  // While status is still loading (`null`) this is false, so native chat stays up
-  // and we never spin up the host or a WebView cutout speculatively.
-  const embedCandidate = isMoltorinoEmbedCandidate(embeddedEnabled, runtimeAvailable);
+  // resolver reports a launchable runtime + the primary surface is visible. We gate
+  // on real availability (not a non-empty custom path) so the bundled runtime works
+  // with the field blank. While status is still loading (`null`) this is false, so
+  // native chat stays up and we never spin up the host or a WebView cutout
+  // speculatively. `surfaceVisible` is false while Settings is open, so the native
+  // Moltorino window can't draw through the Settings overlay.
+  const embedCandidate = isMoltorinoEmbedCandidate(embeddedEnabled, runtimeAvailable, surfaceVisible);
 
   // One debouncer for the lifetime of the surface. It commits the resolved
   // channel (or null) into React state; dedup means an unchanged channel never

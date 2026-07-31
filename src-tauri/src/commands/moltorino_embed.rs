@@ -168,13 +168,77 @@ pub fn clip_hole_to_webview(
     Some((left, top, right, bottom))
 }
 
+/// Compute the `(width, height)` a reparented child must take to fill a host's
+/// client area, from that host's client rectangle `(left, top, right, bottom)`.
+///
+/// `GetClientRect` always reports `left`/`top` as `0`, but we take the full
+/// rectangle and derive the extent by subtraction so an inverted or garbage
+/// rectangle can never yield a negative `SetWindowPos` dimension: `saturating_sub`
+/// guards the arithmetic and `max(0)` floors each side at zero. A zero-sized host
+/// therefore produces `(0, 0)` (the child collapses rather than the call failing),
+/// and an inverted rect (`right < left`) also clamps to zero rather than going
+/// negative.
+///
+/// Split out as a pure function so the clamping is unit-tested without a live
+/// HWND; the live `GetClientRect`/`SetWindowPos` wiring lives in
+/// `imp::fit_child_to_host`, which is the single place the embedded child is
+/// sized — always from the host's live client rect, never a cached `state.bounds`.
+pub fn host_client_size(rect: (i32, i32, i32, i32)) -> (i32, i32) {
+    let (left, top, right, bottom) = rect;
+    let w = right.saturating_sub(left).max(0);
+    let h = bottom.saturating_sub(top).max(0);
+    (w, h)
+}
+
+/// Decide whether the embedded child needs a corrective refit, given the host's
+/// client size and the child's current client size.
+///
+/// This is the pure core of the `WM_APP_REFIT_CHILD` handler and — critically —
+/// the loop terminator for the WinEvent-driven refit. Qt reparents its split
+/// window and then, a beat later, snaps it back to its own default size (the
+/// live-captured 300x150), firing `EVENT_OBJECT_LOCATIONCHANGE`. We answer that
+/// by refitting the child to the host. But our own `SetWindowPos` *also* moves
+/// the child, firing another location-change; if we refit unconditionally we'd
+/// loop forever. So the rule is: **only refit when the sizes actually differ.**
+/// Once the child matches the host, the echo event finds them equal and stops.
+///
+/// A zero-sized host (`(0, 0)`, e.g. hidden/not-yet-laid-out) never asks for a
+/// refit: fitting a child to nothing is pointless and would just churn. Every
+/// input is already clamped non-negative by [`host_client_size`], so there is no
+/// sign/overflow hazard here.
+pub fn should_refit_child(host: (i32, i32), child: (i32, i32)) -> bool {
+    let (hw, hh) = host;
+    if hw <= 0 || hh <= 0 {
+        return false;
+    }
+    child != host
+}
+
+/// Whether a WinEvent's window handle refers to the child we're currently
+/// embedding, used to filter the `EVENT_OBJECT_LOCATIONCHANGE` callback.
+///
+/// The out-of-context WinEvent hook is scoped to Moltorino's process/thread, but
+/// that thread can own more than one window, and — more importantly — a stale
+/// event queued before a Settings-close teardown must never act on the *new*
+/// child attached after the following fresh start. The callback therefore
+/// compares the event's HWND against the currently-attached child (`None` when
+/// nothing is attached yet) and ignores everything else. Split out as a pure
+/// `isize` comparison so the stale-child filtering is unit-tested without a live
+/// HWND or a live hook.
+pub fn is_current_child(event_hwnd: isize, current_child: Option<isize>) -> bool {
+    current_child == Some(event_hwnd)
+}
+
 // ---------------------------------------------------------------------------
 // Windows implementation.
 // ---------------------------------------------------------------------------
 
 #[cfg(windows)]
 mod imp {
-    use super::{build_set_channel_json, parse_created_window};
+    use super::{
+        build_set_channel_json, host_client_size, is_current_child, parse_created_window,
+        should_refit_child,
+    };
     use crate::commands::moltorino::{
         display_path, is_valid_twitch_login, resolve_moltorino_runtime,
     };
@@ -199,22 +263,27 @@ mod imp {
     use windows::Win32::System::Threading::{
         GetCurrentProcessId, OpenProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE,
     };
+    use windows::Win32::UI::Accessibility::{SetWinEventHook, UnhookWinEvent, HWINEVENTHOOK};
     use windows::Win32::UI::WindowsAndMessaging::{
         CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, EnumChildWindows,
         GetAncestor, GetClassNameW, GetClientRect, GetMessageW, GetParent, GetWindowLongPtrW,
         GetWindowThreadProcessId, IsWindow, IsWindowVisible, PostMessageW, PostQuitMessage,
         RegisterClassW, SendMessageTimeoutW, SetParent, SetWindowLongPtrW, SetWindowPos,
-        ShowWindow, TranslateMessage, CREATESTRUCTW, GA_ROOT, GWLP_USERDATA, GWL_STYLE, HWND_TOP,
-        MSG, SEND_MESSAGE_TIMEOUT_FLAGS, SMTO_ABORTIFHUNG, SWP_FRAMECHANGED, SWP_HIDEWINDOW,
-        SWP_NOACTIVATE, SWP_SHOWWINDOW, SW_HIDE, SW_SHOW, WINDOW_EX_STYLE, WM_APP, WM_COPYDATA,
-        WM_CREATE, WM_DESTROY, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN, WS_CLIPSIBLINGS,
-        WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
+        ShowWindow, TranslateMessage, CREATESTRUCTW, EVENT_OBJECT_LOCATIONCHANGE, GA_ROOT,
+        GWLP_USERDATA, GWL_STYLE, HWND_TOP, MSG, OBJID_WINDOW, SEND_MESSAGE_TIMEOUT_FLAGS,
+        SET_WINDOW_POS_FLAGS, SMTO_ABORTIFHUNG, SWP_FRAMECHANGED, SWP_HIDEWINDOW, SWP_NOACTIVATE,
+        SWP_SHOWWINDOW, SW_HIDE, SW_SHOW, WINDOW_EX_STYLE, WINEVENT_OUTOFCONTEXT, WM_APP,
+        WM_COPYDATA, WM_CREATE, WM_DESTROY, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
+        WS_CLIPSIBLINGS, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SYSMENU, WS_THICKFRAME,
     };
 
     /// Wake the message loop to drain the command queue.
     const WM_APP_WAKE: u32 = WM_APP + 1;
     /// The Moltorino process exited on its own.
     const WM_APP_EXITED: u32 = WM_APP + 2;
+    /// The embedded child fired a location-change (Qt snapped it back to its own
+    /// default size); coalesced request to re-fit it to the host on our thread.
+    const WM_APP_REFIT_CHILD: u32 = WM_APP + 3;
 
     /// Event emitted to the frontend when the embedded surface can't be used and
     /// the UI must fall back to native chat.
@@ -284,6 +353,18 @@ mod imp {
         /// hole. Reset to `None` whenever `webview` is (re-)resolved to a fresh
         /// handle, since that new window starts with no region.
         applied_hole: Option<(i32, i32, i32, i32)>,
+        /// The out-of-context WinEvent hook watching Moltorino's UI thread for
+        /// `EVENT_OBJECT_LOCATIONCHANGE`, so we notice when the reparented child
+        /// self-resizes back to Qt's default (300x150) after we fit it. `None`
+        /// until a child attaches and the hook is installed; unhooked on every
+        /// teardown path. Installed and removed on this (the message-loop) thread,
+        /// which is also where its callback is delivered (WINEVENT_OUTOFCONTEXT).
+        win_event_hook: Option<HWINEVENTHOOK>,
+        /// Coalescing flag: set when a `WM_APP_REFIT_CHILD` is already queued so a
+        /// burst of location-change events collapses into a single refit pass
+        /// instead of flooding the message queue. Cleared when that message is
+        /// handled.
+        refit_pending: bool,
     }
 
     /// What the command layer keeps so it can reach a running host.
@@ -383,22 +464,220 @@ mod imp {
         );
     }
 
+    /// Size `child` to exactly fill `host`'s client area and pin it to the top of
+    /// the host's z-order, applying `extra_flags` on top of the always-present
+    /// `SWP_NOACTIVATE | HWND_TOP`.
+    ///
+    /// This is the single place the embedded child is ever sized. It reads the
+    /// host's *live* client rectangle with `GetClientRect` rather than trusting a
+    /// cached `state.bounds`, so child sizing is ordering-independent: it no longer
+    /// matters whether the last bounds tick had landed when a late `created-window`
+    /// arrives — the child is always fit to the host's real current size. (The bug
+    /// this fixes: after a Settings-close remount the child could stick at Qt's
+    /// 300x150 default inside a correctly-sized host, leaving a stale WebView-cutout
+    /// gap beside it.) The host itself is positioned in root coordinates by
+    /// `apply_bounds`; the child lives in the host's client space, origin `(0,0)`.
+    ///
+    /// After sizing, it reads the child's resulting client size back and emits one
+    /// concise debug line. A mismatch between the requested host size and the
+    /// child's actual size — or any failed Win32 call — is escalated to a warning,
+    /// since that is exactly the undersize symptom we're guarding against.
+    unsafe fn fit_child_to_host(child: HWND, host: HWND, extra_flags: SET_WINDOW_POS_FLAGS) {
+        let mut host_rect = RECT::default();
+        if GetClientRect(host, &mut host_rect).is_err() {
+            log::warn!(
+                "[Moltorino] embed fit_child: GetClientRect(host={:#x}) failed: {:?}",
+                host.0 as isize,
+                GetLastError()
+            );
+            return;
+        }
+        let (w, h) = super::host_client_size((
+            host_rect.left,
+            host_rect.top,
+            host_rect.right,
+            host_rect.bottom,
+        ));
+
+        if let Err(e) = SetWindowPos(
+            child,
+            Some(HWND_TOP),
+            0,
+            0,
+            w,
+            h,
+            SWP_NOACTIVATE | extra_flags,
+        ) {
+            log::warn!(
+                "[Moltorino] embed fit_child: SetWindowPos(child={:#x}) to ({w}x{h}) failed: {e:?}",
+                child.0 as isize,
+            );
+            return;
+        }
+
+        // Read the child's resulting client size back to verify the fit actually
+        // took. Equal dimensions => success (one debug line); any difference =>
+        // the undersize symptom, escalated to a warning.
+        let mut child_rect = RECT::default();
+        if GetClientRect(child, &mut child_rect).is_err() {
+            log::warn!(
+                "[Moltorino] embed fit_child: GetClientRect(child={:#x}) failed after resize: {:?}",
+                child.0 as isize,
+                GetLastError()
+            );
+            return;
+        }
+        let (cw, ch) = super::host_client_size((
+            child_rect.left,
+            child_rect.top,
+            child_rect.right,
+            child_rect.bottom,
+        ));
+
+        if cw != w || ch != h {
+            log::warn!(
+                "[Moltorino] embed fit_child: child={:#x} size ({cw}x{ch}) != host client ({w}x{h})",
+                child.0 as isize,
+            );
+        } else {
+            log::debug!(
+                "[Moltorino] embed fit_child: child={:#x} filled host client ({w}x{h})",
+                child.0 as isize,
+            );
+        }
+    }
+
     /// Resize Moltorino's child to fill our host's client area. Once reparented
     /// its origin *is* the host's client origin, so it sits at 0,0 + host size.
     /// We keep it pinned to the top of the host's z-order (`HWND_TOP`) without
     /// activating it, so it never steals keyboard focus from StreamNook.
     unsafe fn fit_child(state: &HostState) {
         if let Some(child) = state.child {
-            let (_, _, w, h) = state.bounds;
-            let _ = SetWindowPos(
-                child,
-                Some(HWND_TOP),
-                0,
-                0,
-                w.max(0),
-                h.max(0),
-                SWP_NOACTIVATE,
+            fit_child_to_host(child, state.host, SET_WINDOW_POS_FLAGS(0));
+        }
+    }
+
+    thread_local! {
+        /// The host HWND for *this* message-loop thread, published so the
+        /// out-of-context WinEvent callback (which carries no user pointer) can
+        /// reach the thread's `HostState` via `state_ptr`. Each `start` spawns its
+        /// own thread with its own host, so this is naturally one-per-host and
+        /// never shared across embeds. `0` means "no host on this thread yet".
+        static HOST_HWND: std::cell::Cell<isize> = const { std::cell::Cell::new(0) };
+    }
+
+    /// Out-of-context WinEvent callback watching Moltorino's UI thread for
+    /// `EVENT_OBJECT_LOCATIONCHANGE`. Because the hook was installed with
+    /// `WINEVENT_OUTOFCONTEXT` *on the message-loop thread*, this fires on that
+    /// same thread, serialized through its message pump — never concurrently with
+    /// the WndProc handlers — so reaching `HostState` here is single-threaded and
+    /// safe.
+    ///
+    /// It stays deliberately minimal and does NOT size anything itself: it only
+    /// decides whether this event concerns the currently-attached child and, if
+    /// so, coalesces a single `WM_APP_REFIT_CHILD` onto the queue. The actual
+    /// `SetWindowPos` happens in the WndProc handler, off the callback stack, so a
+    /// resize we trigger can't re-enter the hook mid-callback.
+    unsafe extern "system" fn win_event_proc(
+        _hook: HWINEVENTHOOK,
+        event: u32,
+        hwnd: HWND,
+        id_object: i32,
+        _id_child: i32,
+        _id_event_thread: u32,
+        _dwms_event_time: u32,
+    ) {
+        // We only registered the LOCATIONCHANGE range, but filter strictly: react
+        // only to the window object's own move/resize, not child sub-objects.
+        if event != EVENT_OBJECT_LOCATIONCHANGE || id_object != OBJID_WINDOW.0 {
+            return;
+        }
+        let host = HOST_HWND.with(|h| h.get());
+        if host == 0 {
+            return;
+        }
+        let host_hwnd = HWND(host as *mut c_void);
+        let ptr = state_ptr(host_hwnd);
+        if ptr.is_null() {
+            return;
+        }
+        let state = &mut *ptr;
+        // Ignore events for anything but the child we're embedding right now. A
+        // stale event queued before a Settings-close teardown must never act on a
+        // child attached by the following fresh start.
+        let current = state.child.map(|c| c.0 as isize);
+        if !super::is_current_child(hwnd.0 as isize, current) {
+            return;
+        }
+        // Coalesce a burst of location-change events into one queued refit.
+        if state.refit_pending {
+            return;
+        }
+        state.refit_pending = true;
+        let _ = PostMessageW(Some(host_hwnd), WM_APP_REFIT_CHILD, WPARAM(0), LPARAM(0));
+    }
+
+    /// Install the location-change hook on Moltorino's UI thread so we notice when
+    /// the reparented child self-resizes back to Qt's default after we fit it.
+    ///
+    /// Must be called on the message-loop thread, after `state.child` is set. The
+    /// hook is scoped to Moltorino's own process + thread (via
+    /// `GetWindowThreadProcessId` on the child), so it observes only that UI
+    /// thread's events, not the whole desktop. Idempotent: a no-op if a hook is
+    /// already installed or the child handle can't be resolved to a thread.
+    unsafe fn install_win_event_hook(state: &mut HostState) {
+        if state.win_event_hook.is_some() {
+            return;
+        }
+        let Some(child) = state.child else {
+            return;
+        };
+        let mut pid: u32 = 0;
+        let tid = GetWindowThreadProcessId(child, Some(&mut pid as *mut u32));
+        if tid == 0 || pid == 0 {
+            log::warn!(
+                "[Moltorino] embed win-event: GetWindowThreadProcessId(child={:#x}) \
+                 gave pid={pid} tid={tid}; not hooking",
+                child.0 as isize
             );
+            return;
+        }
+        // Publish the host so the callback (same thread) can find HostState.
+        HOST_HWND.with(|h| h.set(state.host.0 as isize));
+        let hook = SetWinEventHook(
+            EVENT_OBJECT_LOCATIONCHANGE,
+            EVENT_OBJECT_LOCATIONCHANGE,
+            None,
+            Some(win_event_proc),
+            pid,
+            tid,
+            WINEVENT_OUTOFCONTEXT,
+        );
+        if hook.0.is_null() {
+            log::warn!(
+                "[Moltorino] embed win-event: SetWinEventHook failed for child={:#x} \
+                 (pid={pid} tid={tid}): {:?}",
+                child.0 as isize,
+                GetLastError()
+            );
+            return;
+        }
+        state.win_event_hook = Some(hook);
+        log::debug!(
+            "[Moltorino] embed win-event hook installed: child={:#x} pid={pid} tid={tid}",
+            child.0 as isize
+        );
+    }
+
+    /// Remove the location-change hook if installed, clearing the coalescing flag.
+    /// Idempotent and safe on every teardown path; must run on the same
+    /// (message-loop) thread that installed it, before the child/host it watches
+    /// is cleared or destroyed, so a stale callback can never act on freed state.
+    unsafe fn remove_win_event_hook(state: &mut HostState, reason: &str) {
+        if let Some(hook) = state.win_event_hook.take() {
+            let _ = UnhookWinEvent(hook);
+            state.refit_pending = false;
+            log::debug!("[Moltorino] embed win-event hook removed (reason: {reason})");
         }
     }
 
@@ -459,20 +738,24 @@ mod imp {
             ));
         }
 
-        let (_, _, w, h) = state.bounds;
         // Apply the new frame and place the child at the host's client origin,
-        // filling it, on top of the host's z-order, without activating.
-        let mut flags = SWP_NOACTIVATE | SWP_FRAMECHANGED;
+        // filling it, on top of the host's z-order, without activating. Size is
+        // taken from the host's live client rect (not state.bounds) so a late
+        // created-window always fills the correctly-sized host regardless of
+        // whether the last bounds tick had landed. SWP_FRAMECHANGED makes the
+        // WS_CHILD style edit take visual effect; SWP_SHOWWINDOW mirrors the
+        // subsequent ShowWindow when the surface is meant to be visible.
+        let mut extra_flags = SWP_FRAMECHANGED;
         if state.visible {
-            flags |= SWP_SHOWWINDOW;
+            extra_flags |= SWP_SHOWWINDOW;
         }
-        let _ = SetWindowPos(child, Some(HWND_TOP), 0, 0, w.max(0), h.max(0), flags);
+        fit_child_to_host(child, state.host, extra_flags);
         let _ = ShowWindow(child, if state.visible { SW_SHOW } else { SW_HIDE });
 
         log::debug!(
             "[Moltorino] embed child reparented: child={:#x} old-parent={:#x} \
              set-parent-prev={:#x} final-parent={:#x} old-style={:#x} new-style={:#x} \
-             size=({w}x{h}) visible={}",
+             visible={}",
             child.0 as isize,
             old_parent.0 as isize,
             set_parent.map(|p| p.0 as isize).unwrap_or(0),
@@ -862,6 +1145,9 @@ mod imp {
                 Cmd::Channel(c) => apply_channel(state, c),
                 Cmd::Shutdown => {
                     state.shutting_down = true;
+                    // Stop watching Moltorino's UI thread before we tear anything
+                    // down, so a queued location-change can't act on freed state.
+                    remove_win_event_hook(state, "shutdown");
                     // Restore the WebView before we destroy anything, so the panel
                     // area is never left as a blank, input-swallowing hole.
                     restore_webview(state, "shutdown");
@@ -912,6 +1198,11 @@ mod imp {
                                     // Moltorino is now inside the host; punch the
                                     // WebView hole so the panel shows through.
                                     apply_cutout(state, "child-attached");
+                                    // Watch Moltorino's UI thread for the late
+                                    // self-resize back to Qt's 300x150 default: the
+                                    // location-change hook posts WM_APP_REFIT_CHILD so
+                                    // we re-fit the child with no timer/poll.
+                                    install_win_event_hook(state);
                                 }
                                 Err(reason) => {
                                     // We couldn't reparent Moltorino's window. Leave
@@ -922,6 +1213,10 @@ mod imp {
                                     // and a later start recreates fresh.
                                     log::warn!("[Moltorino] embed attach failed: {reason}");
                                     state.shutting_down = true;
+                                    // No hook was installed on this path (install
+                                    // happens only on attach success), but remove is
+                                    // idempotent and keeps every teardown uniform.
+                                    remove_win_event_hook(state, "attach-failed");
                                     // Restore the WebView first so no blank hole is
                                     // ever left behind (it almost certainly isn't
                                     // active this early, but restore is idempotent).
@@ -944,6 +1239,50 @@ mod imp {
                 drain_commands(hwnd);
                 LRESULT(0)
             }
+            WM_APP_REFIT_CHILD => {
+                // A location-change on Moltorino's child was coalesced into this
+                // single message by the WinEvent callback. Clear the coalescing
+                // flag first so any events arriving from here on queue a fresh
+                // refit, then correct the child's size — but ONLY if it actually
+                // deviates from the host client size. That conditional is the loop
+                // terminator: our own SetWindowPos below fires another
+                // location-change, which re-enters here, finds the sizes equal, and
+                // does nothing.
+                let ptr = state_ptr(hwnd);
+                if !ptr.is_null() {
+                    let state = &mut *ptr;
+                    state.refit_pending = false;
+                    if let Some(child) = state.child {
+                        if IsWindow(Some(child)).as_bool() && IsWindow(Some(state.host)).as_bool() {
+                            // Host client size.
+                            let mut hr = RECT::default();
+                            // Child client size.
+                            let mut cr = RECT::default();
+                            if GetClientRect(state.host, &mut hr).is_ok()
+                                && GetClientRect(child, &mut cr).is_ok()
+                            {
+                                let host_size =
+                                    super::host_client_size((hr.left, hr.top, hr.right, hr.bottom));
+                                let child_size =
+                                    super::host_client_size((cr.left, cr.top, cr.right, cr.bottom));
+                                if super::should_refit_child(host_size, child_size) {
+                                    log::debug!(
+                                        "[Moltorino] embed win-event refit: child={:#x} \
+                                         ({}x{}) -> host client ({}x{})",
+                                        child.0 as isize,
+                                        child_size.0,
+                                        child_size.1,
+                                        host_size.0,
+                                        host_size.1,
+                                    );
+                                    fit_child_to_host(child, state.host, SET_WINDOW_POS_FLAGS(0));
+                                }
+                            }
+                        }
+                    }
+                }
+                LRESULT(0)
+            }
             WM_APP_EXITED => {
                 let ptr = state_ptr(hwnd);
                 if !ptr.is_null() {
@@ -952,6 +1291,9 @@ mod imp {
                         // Moltorino died unexpectedly: drop our handle to it, tell
                         // the UI to fall back to native chat, and tear the host
                         // down. Clear the global so a later start recreates cleanly.
+                        // Remove the hook first: the child it watched is gone, so a
+                        // late callback must never look for it.
+                        remove_win_event_hook(state, "process-exited");
                         // Restore the WebView first: the child is gone, so leaving
                         // the hole would strand an empty, input-swallowing gap.
                         restore_webview(state, "process-exited");
@@ -967,6 +1309,14 @@ mod imp {
             WM_DESTROY => {
                 let ptr = state_ptr(hwnd);
                 if !ptr.is_null() {
+                    // Safety net: every intentional teardown path already removes
+                    // the hook before reaching here, but if a WM_DESTROY ever
+                    // arrives with one still installed, unhook it before we free the
+                    // state it reaches through, so a queued callback can't touch
+                    // freed memory. Also clears the thread-local host pointer.
+                    let state = &mut *ptr;
+                    remove_win_event_hook(state, "wm-destroy");
+                    HOST_HWND.with(|h| h.set(0));
                     // Reclaim and drop the boxed state (closes the channel, drops
                     // any surviving child handle).
                     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
@@ -1049,6 +1399,8 @@ mod imp {
                 shutting_down: false,
                 webview: None,
                 applied_hole: None,
+                win_event_hook: None,
+                refit_pending: false,
             });
             let state_raw = Box::into_raw(boxed);
 
@@ -1434,7 +1786,8 @@ pub async fn moltorino_embed_stop() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_set_channel_json, clip_hole_to_webview, parse_created_window, translate_client_point,
+        build_set_channel_json, clip_hole_to_webview, host_client_size, is_current_child,
+        parse_created_window, should_refit_child, translate_client_point,
     };
 
     /// The real shape Moltorino emits: pretty-printed, string window-id, one
@@ -1632,5 +1985,102 @@ mod tests {
             clip_hole_to_webview((5000, 40, 402, 1040), (1920, 1080)),
             None
         );
+    }
+
+    // --- Host client -> child size (the undersize-child fix) -----------------
+
+    #[test]
+    fn host_client_size_matches_the_live_bug_rect() {
+        // The exact host client rect from the captured glitch: a 402x1040 host.
+        // GetClientRect reports left/top as 0, so the extent is right/bottom.
+        // The child must be sized to 402x1040 (it was stuck at Qt's 300x150).
+        assert_eq!(host_client_size((0, 0, 402, 1040)), (402, 1040));
+    }
+
+    #[test]
+    fn host_client_size_zero_host_is_safe() {
+        // A zero-sized host (not yet laid out) collapses the child to (0,0)
+        // rather than producing a failed/garbage SetWindowPos call.
+        assert_eq!(host_client_size((0, 0, 0, 0)), (0, 0));
+    }
+
+    #[test]
+    fn host_client_size_inverted_rect_clamps_to_zero() {
+        // A malformed/inverted rectangle (right < left, bottom < top) must clamp
+        // to zero, never yield a negative width/height that SetWindowPos would
+        // interpret as garbage.
+        assert_eq!(host_client_size((100, 200, 40, 60)), (0, 0));
+        // Mixed: width valid, height inverted -> only the bad axis clamps.
+        assert_eq!(host_client_size((0, 500, 402, 100)), (402, 0));
+    }
+
+    #[test]
+    fn host_client_size_saturates_on_extreme_span() {
+        // A pathological rect spanning the full i32 range can't wrap: saturating
+        // subtraction floors it at i32::MAX rather than overflowing.
+        assert_eq!(
+            host_client_size((i32::MIN, i32::MIN, i32::MAX, i32::MAX)),
+            (i32::MAX, i32::MAX)
+        );
+    }
+
+    // --- WinEvent-driven refit decision (should_refit_child) -----------------
+
+    #[test]
+    fn should_refit_when_child_shrank_to_qt_default() {
+        // The exact live-captured bug: host is the correct 402x1040, child snapped
+        // back to Qt's 300x150 default. The sizes differ, so a refit is required.
+        assert!(should_refit_child((402, 1040), (300, 150)));
+    }
+
+    #[test]
+    fn should_not_refit_when_child_already_matches_host() {
+        // The loop terminator: after we refit, our own SetWindowPos fires another
+        // location-change; by then child == host, so this must return false and
+        // stop the cycle.
+        assert!(!should_refit_child((402, 1040), (402, 1040)));
+    }
+
+    #[test]
+    fn should_not_refit_when_host_is_zero_sized() {
+        // A hidden / not-yet-laid-out host reports (0,0). Fitting a child to
+        // nothing is pointless churn, so never ask for a refit — even if the child
+        // currently has some other size.
+        assert!(!should_refit_child((0, 0), (300, 150)));
+        assert!(!should_refit_child((0, 0), (0, 0)));
+        // A single zero axis is still degenerate.
+        assert!(!should_refit_child((402, 0), (300, 150)));
+        assert!(!should_refit_child((0, 1040), (300, 150)));
+    }
+
+    #[test]
+    fn should_refit_when_only_one_axis_differs() {
+        // A partial mismatch (right width, wrong height, or vice-versa) still needs
+        // correcting — the child must match the host on both axes.
+        assert!(should_refit_child((402, 1040), (402, 150)));
+        assert!(should_refit_child((402, 1040), (300, 1040)));
+    }
+
+    // --- WinEvent stale-child filtering (is_current_child) -------------------
+
+    #[test]
+    fn is_current_child_matches_the_attached_child() {
+        // The common case: the event's HWND is exactly the child we're embedding.
+        assert!(is_current_child(0x44f0c3c, Some(0x44f0c3c)));
+    }
+
+    #[test]
+    fn is_current_child_rejects_a_stale_or_other_window() {
+        // A different window on Moltorino's thread, or a stale event for a child
+        // that was torn down before a Settings-close remount, must be ignored so we
+        // never resize the wrong (or a freed) window.
+        assert!(!is_current_child(0xdead, Some(0x44f0c3c)));
+    }
+
+    #[test]
+    fn is_current_child_rejects_when_nothing_attached() {
+        // Before any child attaches (or after teardown clears it), every event is
+        // foreign — there is nothing to refit.
+        assert!(!is_current_child(0x44f0c3c, None));
     }
 }

@@ -1,7 +1,7 @@
 // Run with: node --test src/utils/moltorinoRuntimeGate.test.ts
 //
 // Covers the pure availability gates for the Moltorino integration. Availability
-// is the backend resolver's `available` result — the source of truth — NOT any
+// is the backend resolver's `available` result (the source of truth) — NOT any
 // executable-path string. These tests therefore never construct or mock a path;
 // they feed the resolved boolean|null status directly, exactly as the components
 // receive it from `moltorino_runtime_status`.
@@ -12,24 +12,52 @@ import assert from 'node:assert/strict';
 import { isMoltorinoEmbedCandidate, canOpenInMoltorino } from './moltorinoRuntimeGate.ts';
 
 // --- Embed candidate (embedded-chat surface) ---
+//
+// Signature: isMoltorinoEmbedCandidate(embeddedEnabled, runtimeAvailable, surfaceVisible).
+// The primary surface is visible in these baseline cases (surfaceVisible=true)
+// unless the test is specifically about the surface being hidden.
 
-test('embedded enabled + bundled runtime available -> embed candidate true', () => {
-  assert.equal(isMoltorinoEmbedCandidate(true, true), true);
+test('embedded enabled + bundled runtime available + surface visible -> embed candidate true', () => {
+  assert.equal(isMoltorinoEmbedCandidate(true, true, true), true);
 });
 
-test('embedded enabled + runtime unavailable -> embed candidate false', () => {
-  assert.equal(isMoltorinoEmbedCandidate(true, false), false);
+test('embedded enabled + runtime unavailable + surface visible -> embed candidate false', () => {
+  assert.equal(isMoltorinoEmbedCandidate(true, false, true), false);
 });
 
-test('embedded enabled + status loading (null) -> embed candidate false', () => {
-  assert.equal(isMoltorinoEmbedCandidate(true, null), false);
+test('embedded enabled + status loading (null) + surface visible -> embed candidate false', () => {
+  assert.equal(isMoltorinoEmbedCandidate(true, null, true), false);
 });
 
-test('embedded disabled + runtime available -> embed candidate false', () => {
-  assert.equal(isMoltorinoEmbedCandidate(false, true), false);
+test('embedded disabled + runtime available + surface visible -> embed candidate false', () => {
+  assert.equal(isMoltorinoEmbedCandidate(false, true, true), false);
+});
+
+// --- Surface visibility (Settings overlay) ---
+//
+// The embedded chat is a native Win32 child window that composites above the
+// WebView, so a DOM overlay like Settings cannot cover it. When the primary
+// surface is hidden (Settings open) the candidate must be false regardless of the
+// other terms, so the host unmounts and its teardown restores the WebView region.
+
+test('surface hidden (Settings open) + enabled + runtime available -> embed candidate false', () => {
+  assert.equal(isMoltorinoEmbedCandidate(true, true, false), false);
+});
+
+test('returning surface visibility to true permits embedding again', () => {
+  // Hidden while Settings is open...
+  assert.equal(isMoltorinoEmbedCandidate(true, true, false), false);
+  // ...and re-enabled the moment the surface is visible again (Settings closed),
+  // with no other state having changed. This is what lets the host remount
+  // automatically on close without an app restart.
+  assert.equal(isMoltorinoEmbedCandidate(true, true, true), true);
 });
 
 // --- Open-in-Moltorino button ---
+//
+// The launch button is independent of surface visibility (it lives in the chat
+// toolbar and just spawns/attaches the external client), so its gate keeps the
+// two-term shape: show-button setting + runtime available.
 
 test('show-button enabled + bundled runtime available -> button available', () => {
   assert.equal(canOpenInMoltorino(true, true), true);
@@ -57,14 +85,14 @@ test('show-button disabled + runtime available -> button unavailable', () => {
 
 test('invalid custom override falling through to a valid bundle (available=true) enables both gates', () => {
   // The backend resolver rejected the custom override but found the bundle, so it
-  // reports available=true. Both gates must open on that alone.
-  assert.equal(isMoltorinoEmbedCandidate(true, true), true);
+  // reports available=true. Both gates must open on that alone (surface visible).
+  assert.equal(isMoltorinoEmbedCandidate(true, true, true), true);
   assert.equal(canOpenInMoltorino(true, true), true);
 });
 
 test('empty custom path with a valid bundle (available=true) enables both gates', () => {
   // The custom field is blank; the resolver still finds the bundled runtime and
   // reports available=true. Both gates must open — no non-empty path required.
-  assert.equal(isMoltorinoEmbedCandidate(true, true), true);
+  assert.equal(isMoltorinoEmbedCandidate(true, true, true), true);
   assert.equal(canOpenInMoltorino(true, true), true);
 });
