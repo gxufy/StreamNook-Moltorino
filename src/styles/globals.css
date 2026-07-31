@@ -3440,8 +3440,40 @@ html[data-motion="reduced"] .animate-shimmer {
 }
 .sn-ffz-anim-leave { animation: sn-ffz-leave 0.5s ease-in 1 both; }
 
+/* ============================================================
+   BetterTTV emote modifiers (p! party, s! shake). The rest of
+   BetterTTV's set is static and lives as inline styles, same as
+   the FFZ ones above. Durations and keyframes are transcribed
+   from BetterTTV's own chat stylesheet.
+   ============================================================ */
+
+@keyframes sn-bttv-party {
+  0% { filter: sepia(0.5) hue-rotate(0deg) saturate(2.5); }
+  100% { filter: sepia(0.5) hue-rotate(360deg) saturate(2.5); }
+}
+.sn-bttv-anim-party { animation: sn-bttv-party 1.5s linear infinite; }
+
+/* step-start is what gives BetterTTV's shake its snap: the emote jumps
+   between stops instead of easing through them. */
+@keyframes sn-bttv-shake {
+  0% { translate: 0px 1px; }
+  10% { translate: 2px 0px; }
+  20% { translate: 1px -2px; }
+  30% { translate: -2px 1px; }
+  40% { translate: 0px -1px; }
+  50% { translate: 2px 2px; }
+  60% { translate: -1px -1px; }
+  70% { translate: -2px 2px; }
+  80% { translate: 2px 1px; }
+  90% { translate: -1px -2px; }
+  100% { translate: 1px 0px; }
+}
+.sn-bttv-anim-shake { animation: sn-bttv-shake 500ms step-start infinite; }
+
 /* Reduced motion keeps static effects (flip / wide / tint) but stops the
    animated ones. data-motion="off" is already covered by the global kill. */
+html[data-motion="reduced"] .sn-bttv-anim-party,
+html[data-motion="reduced"] .sn-bttv-anim-shake,
 html[data-motion="reduced"] .sn-ffz-anim-rainbow,
 html[data-motion="reduced"] .sn-ffz-anim-shake,
 html[data-motion="reduced"] .sn-ffz-anim-jam,
@@ -3453,6 +3485,8 @@ html[data-motion="reduced"] .sn-ffz-anim-leave {
   animation: none;
 }
 @media (prefers-reduced-motion: reduce) {
+  .sn-bttv-anim-party,
+  .sn-bttv-anim-shake,
   .sn-ffz-anim-rainbow,
   .sn-ffz-anim-shake,
   .sn-ffz-anim-jam,

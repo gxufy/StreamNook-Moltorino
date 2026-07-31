@@ -16,6 +16,7 @@ import { useAppStore } from '../stores/AppStore';
 import { openBadgesWithBadgeInMain } from '../utils/openBadgesInMain';
 import { useChatUserStore } from '../stores/chatUserStore';
 import { useGiftBombRecipients } from '../stores/giftBombStore';
+import { useMessageRepeat } from '../stores/messageRepeatStore';
 import { ChannelPointsIcon } from './ChannelPointsIcon';
 import { useUserColor } from '../services/userColorCache';
 import { queueBadgeForCaching, getCachedBadgeUrl } from '../services/badgeImageCacheService';
@@ -33,6 +34,20 @@ import { CHANNEL_SPECIFIC_TWITCH_BADGES, orderTwitchBadges } from '../utils/badg
 import { LinkPreviewCard } from './chat/LinkPreviewCard';
 import { SongCard } from './chat/SongCard';
 import { extractPreviewUrls, prettyUrlLabel } from '../services/linkPreviewService';
+import {
+  MOD_HIDDEN,
+  MOD_GROW_X,
+  MOD_SLIDE,
+  MOD_NO_SPACE,
+  MOD_PREFIX,
+  MOD_BTTV_WIDE,
+  MOD_BTTV_ROTATE_L,
+  MOD_BTTV_ROTATE_R,
+  MOD_NON_EFFECT_BITS,
+  MODIFIER_TRANSFORMS,
+  MODIFIER_FILTERS,
+  ANIMATED_MODIFIERS,
+} from '../utils/emoteModifiers';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // 7TV cosmetics have complex dynamic structures that vary by API version
@@ -54,58 +69,29 @@ interface EmoteSegment {
   tier?: string;
   color?: string;
   isZeroWidth?: boolean;
-  /** FFZ modifier bitmask; present only on FFZ modifier emotes */
+  /** Modifier bitmask; present only on modifier emotes (FFZ or BetterTTV) */
   modifierFlags?: number;
 }
 
-// FFZ modifier flag bits (bit order is FFZ's authoritative declaration order).
-const FFZ_HIDDEN = 1;
-const FFZ_FLIP_X = 2;
-const FFZ_FLIP_Y = 4;
-const FFZ_GROW_X = 8;
-const FFZ_SLIDE = 16;
-const FFZ_APPEAR = 32;
-const FFZ_LEAVE = 64;
-const FFZ_ROTATE = 128;
-const FFZ_ROTATE_90 = 256;
-const FFZ_GREYSCALE = 512;
-const FFZ_SEPIA = 1024;
-const FFZ_RAINBOW = 2048;
-const FFZ_HYPER_RED = 4096;
-const FFZ_SHAKE = 8192;
-const FFZ_CURSED = 16384;
-const FFZ_JAM = 32768;
-const FFZ_BOUNCE = 65536;
-
-// Animated FFZ effects -> CSS class (keyframes in globals.css). Each gets its
-// OWN wrapper element: two animations on one element that animate the same
-// property cancel each other (ffzHyper alone needs a static filter plus the
-// shake animation to coexist).
-const FFZ_ANIMATED: Array<[number, string]> = [
-  [FFZ_RAINBOW, 'sn-ffz-anim-rainbow'],
-  [FFZ_SHAKE, 'sn-ffz-anim-shake'],
-  [FFZ_JAM, 'sn-ffz-anim-jam'],
-  [FFZ_BOUNCE, 'sn-ffz-anim-bounce'],
-  [FFZ_ROTATE, 'sn-ffz-anim-spin'],
-  [FFZ_SLIDE, 'sn-ffz-anim-slide'],
-  [FFZ_APPEAR, 'sn-ffz-anim-appear'],
-  [FFZ_LEAVE, 'sn-ffz-anim-leave'],
-];
-
-// Wrap a rendered emote group in the effect layers its aggregated FFZ flags
-// demand. Every wrapper is inline-block: CSS transforms are a no-op on plain
-// inline elements. The outermost wrapper takes over the group's alignment and
-// margin (the grid span drops them when wrapped).
-const wrapWithFfzEffects = (
+// Wrap a rendered emote group in the effect layers its aggregated modifier
+// flags demand. Every wrapper is inline-block: CSS transforms are a no-op on
+// plain inline elements. The outermost wrapper takes over the group's
+// alignment and margin (the grid span drops them when wrapped).
+//
+// `pullBack` applies BetterTTV's zero-space modifier (z!), which eats the
+// space before the target rather than overlaying it. It is suppressed for the
+// first element of a message so the emote does not hang off the left edge.
+const wrapWithEmoteEffects = (
   node: React.ReactNode,
   flags: number,
   key: string,
+  pullBack: boolean,
 ): React.ReactNode => {
   let out = node;
   const transforms: string[] = [];
-  if (flags & FFZ_FLIP_X) transforms.push('scaleX(-1)');
-  if (flags & FFZ_FLIP_Y) transforms.push('scaleY(-1)');
-  if (flags & FFZ_ROTATE_90) transforms.push('rotate(90deg)');
+  for (const [bit, value] of MODIFIER_TRANSFORMS) {
+    if (flags & bit) transforms.push(value);
+  }
   if (transforms.length) {
     out = (
       <span className="inline-block" style={{ transform: transforms.join(' ') }}>
@@ -114,11 +100,8 @@ const wrapWithFfzEffects = (
     );
   }
   const filters: string[] = [];
-  if (flags & FFZ_GREYSCALE) filters.push('grayscale(1)');
-  if (flags & FFZ_SEPIA) filters.push('sepia(1)');
-  if (flags & FFZ_CURSED) filters.push('grayscale(1) brightness(0.7) contrast(2.5)');
-  if (flags & FFZ_HYPER_RED) {
-    filters.push('brightness(0.2) sepia(1) brightness(2.2) contrast(3) saturate(8)');
+  for (const [bit, value] of MODIFIER_FILTERS) {
+    if (flags & bit) filters.push(value);
   }
   if (filters.length) {
     out = (
@@ -127,17 +110,22 @@ const wrapWithFfzEffects = (
       </span>
     );
   }
-  for (const [bit, cls] of FFZ_ANIMATED) {
+  for (const [bit, cls] of ANIMATED_MODIFIERS) {
     if (flags & bit) {
       out = <span className={`inline-block ${cls}`}>{out}</span>;
     }
   }
-  if (flags & FFZ_SLIDE) {
+  if (flags & MOD_SLIDE) {
     // Slide is a marquee: the animated layer translates inside a clipped frame.
     out = <span className="inline-block overflow-hidden">{out}</span>;
   }
+  const noSpace = (flags & MOD_NO_SPACE) !== 0 && pullBack;
   return (
-    <span key={key} className="inline-block align-middle mx-0.5">
+    <span
+      key={key}
+      className={`inline-block align-middle ${noSpace ? 'mr-0.5' : 'mx-0.5'}`}
+      style={noSpace ? { marginLeft: '-4px' } : undefined}
+    >
       {out}
     </span>
   );
@@ -168,6 +156,27 @@ const GrowXEmoteImg = (
         height: baseHeight,
         width: ratio ? `calc(${baseHeight} * ${(2 * ratio).toFixed(4)})` : 'auto',
         maxWidth: 'calc(256px * var(--sn-emote-scale, 1))',
+      }}
+    />
+  );
+};
+
+// BetterTTV's w! forces the emote box to a 4:1 stretch (its CSS is a literal
+// 112x28 with object-fit: fill at the 28px chat size). Unlike FFZ's ffzW this
+// deliberately does NOT preserve aspect ratio, so nothing needs measuring.
+const WideEmoteImg = (
+  props: React.ImgHTMLAttributes<HTMLImageElement> & { baseHeight: string },
+) => {
+  const { baseHeight, style, ...rest } = props;
+  return (
+    <img
+      {...rest}
+      style={{
+        ...style,
+        height: baseHeight,
+        width: `calc(${baseHeight} * 4)`,
+        objectFit: 'fill',
+        maxWidth: 'calc(512px * var(--sn-emote-scale, 1))',
       }}
     />
   );
@@ -497,6 +506,22 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
   const { expected: giftExpected, recipients: giftRecipients } = useGiftBombRecipients(giftOriginId);
   const [giftRecipientsExpanded, setGiftRecipientsExpanded] = useState(false);
 
+  // Repeat run: how many copies of this message the ingest path folded into it.
+  // Same shape as the gift bomb above — subscribing here, inside the row, is
+  // what lets an already-mounted message update its count without new props.
+  const repeat = useMessageRepeat(typeof message === 'string' ? undefined : message.id);
+  const repeatSettings = useAppStore((s) => s.settings.message_repeat);
+  const repeatThreshold = Math.max(2, repeatSettings?.threshold ?? 2);
+  const showRepeatCount = repeat.count >= repeatThreshold;
+  const repeatTooltip = useMemo(() => {
+    if (!showRepeatCount) return '';
+    const names = repeat.participants.map((p) => p.displayName).filter(Boolean);
+    if (names.length === 0) return `Sent ${repeat.count} times`;
+    const shown = names.slice(0, 10).join(', ');
+    const hidden = repeat.count - 1 - Math.min(names.length, 10);
+    return hidden > 0 ? `Also sent by ${shown} and ${hidden} more` : `Also sent by ${shown}`;
+  }, [showRepeatCount, repeat.count, repeat.participants]);
+
   // PHASE 3.1 - THE ENDGAME: Use pre-formatted timestamps from Rust
   // Zero Date parsing on main thread!
   // IMPORTANT: This useMemo MUST be at the top before any conditional returns
@@ -625,7 +650,32 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
   // Provider-aware ban/timeout. Twitch -> Helix `ban_user` (duration in SECONDS,
   // null = permanent ban). Kick -> `kick_ban_user` (duration in MINUTES, null =
   // permanent) addressed by numeric Kick ids (the broadcaster + the chatter).
-  const modBan = async (durationSeconds: number | null) => {
+  // Shift-click hands the command to the composer instead of firing it, so the
+  // reason can be edited first — the same prefill-then-edit flow the user card
+  // uses. Sent as a window event rather than a new prop because the message
+  // list's props are performance-sensitive, and it matches how /clearmessages
+  // and /usercard already talk to ChatWidget.
+  const prefillModCommand = (durationSeconds: number | null) => {
+    const saved = useAppStore.getState().settings.moderation?.saved_ban_reasons?.[0]?.trim() ?? '';
+    const target = parsed.username;
+    const cmd =
+      durationSeconds == null
+        ? `/ban ${target} ${saved}`
+        : `/timeout ${target} ${durationSeconds} ${saved}`;
+    // Scoped to this message's channel: several chat surfaces can be mounted in
+    // one window (MultiNook, split panes), and an unscoped event would overwrite
+    // the composer in all of them.
+    window.dispatchEvent(
+      new CustomEvent('streamnook-prefill-command', {
+        detail: { channel: parsed.channel, command: cmd },
+      }),
+    );
+  };
+
+  const modBan = async (durationSeconds: number | null, reasonOverride?: string) => {
+    // Falls back to the first saved reason, so the common case needs no typing.
+    const saved = useAppStore.getState().settings.moderation?.saved_ban_reasons?.[0]?.trim();
+    const reason = (reasonOverride ?? saved ?? '').trim() || null;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       if (parsed.provider === 'kick') {
@@ -636,7 +686,7 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
           broadcasterUserId: Number(broadcasterId),
           targetUserId: Number(providerUserId),
           durationMinutes,
-          reason: null,
+          reason,
         });
       } else if (parsed.provider === 'youtube') {
         // YouTube: address the chatter by their channel id; a duration = timeout
@@ -650,7 +700,7 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
       } else {
         const targetUserId = parsed.tags.get('user-id');
         if (!targetUserId) return;
-        await invoke('ban_user', { broadcasterId, targetUserId, duration: durationSeconds, reason: null });
+        await invoke('ban_user', { broadcasterId, targetUserId, duration: durationSeconds, reason });
       }
     } catch (err) {
       Logger.error('[ChatMessage] mod ban/timeout failed:', err);
@@ -1011,11 +1061,13 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
     key: string,
     inGrid: boolean,
     isOverlay: boolean = false,
-    // FFZ modifier extras for a group's base member: growX stretches this
-    // emote to double width; modifierNames lists the applied modifiers for
+    // Modifier extras for a group's base member: growX stretches this
+    // emote to double width (FFZ ffzW), wideX to a fixed 4:1 stretch (BTTV w!),
+    // and rotated caps its width so a 90-degree turn cannot overflow into the
+    // neighbouring chat lines. modifierNames lists the applied modifiers for
     // the tooltip (hidden modifiers render no img, so this is the only place
     // their presence is explained).
-    ffz?: { growX?: boolean; modifierNames?: string[] },
+    mods?: { growX?: boolean; wideX?: boolean; rotated?: boolean; modifierNames?: string[] },
   ) => {
     const gridStyle = inGrid ? { gridArea: '1/1' } : {};
     const marginClass = inGrid ? '' : 'mx-0.5';
@@ -1092,6 +1144,9 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
             ? 'calc(128px * var(--sn-emote-scale, 1))'
             : 'calc(9em * var(--sn-emote-scale, 1))',
           ...(inGrid ? {} : { marginLeft: 'var(--sn-emote-margin, 0.125rem)', marginRight: 'var(--sn-emote-margin, 0.125rem)' }),
+          // Must come last: a rotated emote is squared off first, exactly as
+          // BetterTTV does it, so the turned image cannot spill vertically.
+          ...(mods?.rotated ? { maxWidth: 'calc(1.75rem * var(--sn-emote-scale, 1))' } : {}),
         },
         referrerPolicy: 'no-referrer',
         onClick: () => {
@@ -1124,7 +1179,14 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
           t.insertAdjacentText('afterend', segment.content);
         },
       };
-      const imgElement = ffz?.growX ? (
+      // BetterTTV's absolute stretch wins over FFZ's relative one when a
+      // message stacks w! and ffzW on the same target.
+      const imgElement = mods?.wideX ? (
+        <WideEmoteImg
+          {...imgProps}
+          baseHeight={'calc(1.75rem * var(--sn-emote-scale, 1))'}
+        />
+      ) : mods?.growX ? (
         <GrowXEmoteImg
           {...imgProps}
           baseHeight={'calc(1.75rem * var(--sn-emote-scale, 1))'}
@@ -1200,9 +1262,9 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
                   </span>
                 )
               )}
-              {ffz?.modifierNames && ffz.modifierNames.length > 0 && (
+              {mods?.modifierNames && mods.modifierNames.length > 0 && (
                 <span className="flex flex-wrap justify-center gap-1 mt-0.5">
-                  {ffz.modifierNames.map((n) => (
+                  {mods.modifierNames.map((n) => (
                     <span
                       key={n}
                       className="text-[9px] font-bold tracking-wider uppercase text-warning mix-blend-screen drop-shadow-sm"
@@ -1302,10 +1364,60 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
   };
 
   const renderContent = (segments: EmoteSegment[]) => {
-    // Phase 1: Group zero-width emotes with their preceding visual elements
+    // Phase 1: Group modifier and zero-width emotes with their target. FFZ
+    // modifiers and 7TV/BTTV overlays attach BACKWARD (look-back, below);
+    // BetterTTV modifiers attach FORWARD, so they are buffered until their
+    // target arrives.
     const groupedSegments: (EmoteSegment | EmoteSegment[])[] = [];
 
+    const bttvModsOn = chatDesign?.bttv_emote_modifiers !== false;
+    // Structural, NOT gated on the setting: a prefix modifier must never fall
+    // through to the look-back below, or it would attach to the emote before
+    // it, which is the bug this whole path exists to fix.
+    const isPrefixMod = (s: EmoteSegment) =>
+      s.type === 'emote' && ((s.modifierFlags ?? 0) & MOD_PREFIX) !== 0;
+    const isSpacer = (s: EmoteSegment) => s.type === 'text' && s.content.trim() === '';
+    // A modifier can never be another modifier's target.
+    const isTarget = (s: EmoteSegment) =>
+      (s.type === 'emote' || s.type === 'emoji') && s.modifierFlags == null;
+
+    // Holds spacers as well as modifiers, so an unmatched run can be flushed
+    // back verbatim and "w! hello" keeps its space.
+    let pending: EmoteSegment[] = [];
+    const flushPending = () => {
+      // Straight into groupedSegments: an orphan prefix modifier renders as
+      // its own plain art and must NOT enter the look-back branch.
+      for (const p of pending) groupedSegments.push(p);
+      pending = [];
+    };
+
     segments.forEach((segment) => {
+      if (isPrefixMod(segment)) {
+        if (!bttvModsOn) {
+          flushPending();
+          groupedSegments.push(segment);
+          return;
+        }
+        pending.push(segment);
+        return;
+      }
+
+      if (pending.length > 0) {
+        const last = pending[pending.length - 1];
+        // The run survives exactly one spacer, matching BetterTTV: a doubled
+        // space breaks attachment.
+        if (isSpacer(segment) && !isSpacer(last)) {
+          pending.push(segment);
+          return;
+        }
+        if (isTarget(segment) && isSpacer(last)) {
+          groupedSegments.push([segment, ...pending.filter(isPrefixMod)]);
+          pending = [];
+          return;
+        }
+        flushPending();
+      }
+
       if (segment.type === 'emote' && segment.isZeroWidth) {
         if (groupedSegments.length > 0) {
           const last = groupedSegments[groupedSegments.length - 1];
@@ -1342,29 +1454,40 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
         groupedSegments.push(segment);
       }
     });
+    flushPending();
 
     // Phase 2: Render groups. Member 0 is the target: it always draws its own
     // art and contributes no flags (an orphan modifier therefore renders as a
-    // normal emote, matching FFZ). Members 1..n are the attached overlays /
-    // modifiers: FFZ modifiers with the Hidden bit render no image and instead
-    // contribute their effect to the whole group.
+    // normal emote, matching both FFZ and BetterTTV). Members 1..n are the
+    // attached overlays / modifiers: a modifier with the Hidden bit renders no
+    // image and instead contributes its effect to the whole group.
     const ffzEffectsOn = settings?.chat_design?.ffz_emote_effects !== false;
+    // Which toggle owns a member is read off MOD_PREFIX: BetterTTV modifiers
+    // always set it, FFZ modifiers never do. BetterTTV needs no check here
+    // because Phase 1 already keeps its modifiers out of groups when its
+    // toggle is off.
+    const memberContributes = (seg: EmoteSegment) =>
+      ((seg.modifierFlags ?? 0) & MOD_PREFIX) !== 0 || ffzEffectsOn;
+
     return groupedSegments.map((group, index) => {
       if (Array.isArray(group)) {
-        const aggFlags = ffzEffectsOn
-          ? group.slice(1).reduce((acc, seg) => acc | (seg.modifierFlags ?? 0), 0)
-          : 0;
-        // Effect bits only: Hidden alone (legacy overlay modifiers) needs no
-        // wrapper, and with effects off everything falls through to today's
-        // plain overlay rendering.
-        const effectBits = aggFlags & ~FFZ_HIDDEN;
-        const growX = (effectBits & FFZ_GROW_X) !== 0;
-        const modifierNames = ffzEffectsOn
-          ? group
-              .slice(1)
-              .filter((s) => s.modifierFlags != null)
-              .map((s) => s.content)
-          : [];
+        const aggFlags = group
+          .slice(1)
+          .reduce((acc, seg) => (memberContributes(seg) ? acc | (seg.modifierFlags ?? 0) : acc), 0);
+        // Effect bits only. Hidden alone (legacy overlay modifiers) needs no
+        // wrapper, and MOD_PREFIX is a routing marker rather than an effect,
+        // so neither may force the wrapper path.
+        const effectBits = aggFlags & ~MOD_NON_EFFECT_BITS;
+        const growX = (effectBits & MOD_GROW_X) !== 0;
+        const rotated = (effectBits & (MOD_BTTV_ROTATE_L | MOD_BTTV_ROTATE_R)) !== 0;
+        // Rotating beats widening, because in BetterTTV the rotate rule's
+        // max-width overrides the wide rule's width. Without this a rotated
+        // wide emote would stand 4 lines tall and spill over its neighbours.
+        const wideX = (effectBits & MOD_BTTV_WIDE) !== 0 && !rotated;
+        const modifierNames = group
+          .slice(1)
+          .filter((s) => s.modifierFlags != null && memberContributes(s))
+          .map((s) => s.content);
 
         const gridSpan = (
           <span
@@ -1373,9 +1496,9 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
           >
             {group.map((seg, innerIndex) => {
               const hiddenModifier =
-                ffzEffectsOn &&
                 innerIndex > 0 &&
-                ((seg.modifierFlags ?? 0) & FFZ_HIDDEN) !== 0;
+                memberContributes(seg) &&
+                ((seg.modifierFlags ?? 0) & MOD_HIDDEN) !== 0;
               if (hiddenModifier) return null;
               return renderSegment(
                 seg,
@@ -1383,14 +1506,19 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
                 true,
                 innerIndex > 0,
                 innerIndex === 0
-                  ? { growX, modifierNames: modifierNames.length ? modifierNames : undefined }
+                  ? {
+                      growX,
+                      wideX,
+                      rotated,
+                      modifierNames: modifierNames.length ? modifierNames : undefined,
+                    }
                   : undefined,
               );
             })}
           </span>
         );
         if (!effectBits) return gridSpan;
-        return wrapWithFfzEffects(gridSpan, effectBits, `group-${index}`);
+        return wrapWithEmoteEffects(gridSpan, effectBits, `group-${index}`, index > 0);
       }
       return renderSegment(group, index.toString(), false, false);
     });
@@ -3078,6 +3206,16 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
                           : '[deleted by mod]'}
                     </span>
                   )}
+                  {showRepeatCount && (
+                    <Tooltip content={repeatTooltip} side="top">
+                      <span
+                        className="ml-1.5 text-xs font-semibold tabular-nums cursor-default"
+                        style={{ color: repeatSettings?.color || 'var(--color-text-secondary)' }}
+                      >
+                        x{repeat.count}
+                      </span>
+                    </Tooltip>
+                  )}
                 </span>
               </>
             )}
@@ -3180,10 +3318,11 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
 
               {/* Quick Timeout (10m) */}
               <div className="relative flex group/timeout">
-            <Tooltip content="Timeout User (10m)" side="top">
+            <Tooltip content="Timeout User (10m) — shift-click to add a reason" side="top">
               <button
                 onClick={(e) => {
                   e.preventDefault();
+                  if (e.shiftKey) { prefillModCommand(600); return; }
                   void modBan(600);
                 }}
                 className="p-2 rounded-lg hover:bg-warning/20 text-white/50 hover:text-warning transition-colors"
@@ -3207,6 +3346,7 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      if (e.shiftKey) { prefillModCommand(opt.val); return; }
                       void modBan(opt.val);
                     }}
                   >
@@ -3220,10 +3360,11 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
           <div className="w-px h-5 bg-white/10" />
 
           {/* Quick Ban */}
-          <Tooltip content="Ban User" side="top">
+          <Tooltip content="Ban User — shift-click to add a reason" side="top">
             <button
               onClick={(e) => {
                 e.preventDefault();
+                if (e.shiftKey) { prefillModCommand(null); return; }
                 void modBan(null);
               }}
               className="p-2 rounded-lg hover:bg-error/15 text-white/50 hover:text-error transition-colors"
