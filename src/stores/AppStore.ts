@@ -753,30 +753,37 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isAutoSwitching: true });
 
     try {
-      // Step 1: Verify the stream is actually offline via Twitch API
-      // We'll check twice with a delay to be sure (streams can have brief interruptions)
-      let isOffline = false;
+      // Step 1: Verify the stream is actually offline via Twitch API.
+      // The triggers (EventSub stream.offline, player errors) run seconds AHEAD
+      // of the Helix streams endpoint, which keeps listing a dead stream for a
+      // while after it ends. A fast double-check therefore reads "still online"
+      // for a genuinely-ended stream and wastes the one-shot trigger. Poll for
+      // up to ~35s instead: proceed once Helix reports offline twice in a row,
+      // give up only if the window closes with Helix still reporting the stream
+      // live (a brief encoder blip the streamer recovered from).
+      const VERIFY_ATTEMPTS = 8;
+      const VERIFY_INTERVAL_MS = 5000;
+      let consecutiveOffline = 0;
 
-      for (let attempt = 0; attempt < 2; attempt++) {
+      for (let attempt = 0; attempt < VERIFY_ATTEMPTS; attempt++) {
         if (attempt > 0) {
-          // Wait 3 seconds before second check
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise(resolve => setTimeout(resolve, VERIFY_INTERVAL_MS));
         }
 
         const streamData = await invoke('check_stream_online', { userLogin: currentUserLogin }) as TwitchStream | null;
 
         if (streamData) {
-          Logger.debug(`[AutoSwitch] Stream is still online (attempt ${attempt + 1}), aborting auto-switch`);
-          set({ isAutoSwitching: false });
-          return;
+          consecutiveOffline = 0;
+          Logger.debug(`[AutoSwitch] Helix still reports ${currentUserLogin} online (attempt ${attempt + 1}/${VERIFY_ATTEMPTS})`);
+        } else {
+          consecutiveOffline++;
+          Logger.debug(`[AutoSwitch] Stream reported offline (${consecutiveOffline}/2, attempt ${attempt + 1}/${VERIFY_ATTEMPTS})`);
+          if (consecutiveOffline >= 2) break;
         }
-
-        Logger.debug(`[AutoSwitch] Stream confirmed offline (attempt ${attempt + 1})`);
       }
 
-      isOffline = true;
-
-      if (!isOffline) {
+      if (consecutiveOffline < 2) {
+        Logger.debug('[AutoSwitch] Helix kept reporting the stream online; treating as a blip and aborting');
         set({ isAutoSwitching: false });
         return;
       }
@@ -1457,7 +1464,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   restartStream: async () => {
-    const { currentStream, settings, currentMediaType } = get();
+    const { currentStream, settings, currentMediaType, isAutoSwitching } = get();
     if (!currentStream) {
       Logger.warn('[Stream] Cannot restart: no current stream');
       return;
@@ -1465,6 +1472,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     if (currentMediaType && currentMediaType !== 'live') {
       Logger.warn('[Stream] Cannot restart non-live media (clips/videos).');
+      return;
+    }
+
+    // The behind-live watchdog keeps firing while auto-switch verifies a dead
+    // stream; a restart mid-switch would tear down the backend under it.
+    if (isAutoSwitching) {
+      Logger.debug('[Stream] Skipping restart: auto-switch in progress');
       return;
     }
 
@@ -1521,6 +1535,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       get().addToast('Stream restarted with new settings', 'success');
     } catch (e) {
       Logger.error('[Stream] Failed to restart:', e);
+
+      // A restart that dies on resolve is the signature of a stream that just
+      // ended: usher 404s and every further retry will too. Without this check
+      // the watchdog loops restart -> 404 -> restart forever and auto-switch
+      // never gets a chance. Confirm liveness and hand a dead channel to
+      // handleStreamOffline (auto-switch / offline chat) instead of retrying.
+      try {
+        const live = await invoke('check_stream_online', { userLogin: channel }) as TwitchStream | null;
+        if (!live) {
+          Logger.info(`[Stream] ${channel} is offline; routing to auto-switch instead of restarting`);
+          set({ isRestartingStream: false });
+          await get().handleStreamOffline();
+          return;
+        }
+      } catch (checkError) {
+        Logger.warn('[Stream] Liveness check after failed restart errored:', checkError);
+      }
+
       get().addToast('Failed to restart stream', 'error');
 
       // Try to recover by starting fresh
@@ -1741,8 +1773,16 @@ export const useAppStore = create<AppState>((set, get) => ({
             channelName
           });
           Logger.debug('Started drops monitoring for', channelName);
-          
+
           invoke('register_active_channel', { channelId }).catch(() => {});
+        } else {
+          // No usable channel id (get_channel_info failed and the placeholder
+          // carries user_id: ''): the heartbeat would otherwise keep its
+          // PREVIOUS target and credit a channel nobody is watching for the
+          // whole session. Not earning here is honest; earning for the wrong
+          // channel is not.
+          Logger.warn(`[Drops] No channel id for ${channelName}; stopping stale monitoring`);
+          await invoke('stop_drops_monitoring');
         }
       } catch (e) {
         Logger.warn('Could not start drops monitoring:', e);

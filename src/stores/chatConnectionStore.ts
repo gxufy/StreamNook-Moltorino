@@ -799,8 +799,12 @@ function startHealthCheck() {
       if (!currentStream || isAutoSwitching) return;
       (async () => {
         try {
-          const online = await invoke<boolean>('check_stream_online', {
-            channel: currentStream.user_login,
+          // The command's argument is user_login (camelCased by Tauri); passing
+          // { channel } rejects with a missing-arg error, which lands in the
+          // catch below and silently turned this offline check into a chat
+          // reconnect every time.
+          const online = await invoke<object | null>('check_stream_online', {
+            userLogin: currentStream.user_login,
           });
           if (online) {
             Logger.debug('[ChatStore] Stream online but chat dead, reconnecting chat');
