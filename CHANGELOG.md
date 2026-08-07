@@ -1,3 +1,23 @@
+## [8.3.12] - 2026-08-07
+
+### ✨ Features
+- Gigantified emotes now render like they do on Twitch: when someone uses the "Gigantify an Emote" power-up, the last emote in their message shows up big beneath the message, in both chat and your stream overlay. Turn it off any time in Chat > Render Style or in the overlay builder.
+- Bits cheers show Twitch's animated bits gem, colored by the cheer amount, instead of a static icon.
+- Run multiple stream overlays at once, each with its own style and its own OBS link. Create, rename, duplicate, and delete overlays right in the builder. Perfect for a clean look on face-cam scenes and a louder one for events.
+- Watch streaks on the overlay now match the app: the fire icon, the streak count, any channel points earned, and the viewer's own message.
+
+### 🐛 Bug Fixes
+- Fixed the app not switching away when the stream you were watching ended; it kept trying to restart a dead stream instead.
+- Fixed channel points and drops sometimes staying pointed at the previous channel after switching streams, and a case where an ended stream could keep counting watch time against its old broadcast.
+- Drops now show as disconnected at startup if the stored connection has expired, instead of claiming to be connected while earning nothing.
+- Event labels in the overlay builder now match each platform (Bits on Twitch, Super Chats on YouTube).
+
+### 🔧 Maintenance
+- Polished the overlay builder: tidier controls, sub-settings visually grouped under the setting they belong to, and the 7TV logo shown where 7TV features are named.
+
+### ⚡ Performance
+- Fixed a slow memory build-up over long sessions from chatter cosmetics caching, and stopped chat restarts from leaving stale background work and open connections behind.
+
 ## [8.3.11] - 2026-07-31
 
 ## 🎉 A big one for streamers and mods
