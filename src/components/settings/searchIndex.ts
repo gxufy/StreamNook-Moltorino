@@ -638,6 +638,12 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   },
   {
     tab: 'Chat',
+    section: 'Render Style',
+    title: 'Giant emotes',
+    description: 'Render the last emote of a Gigantify power-up message at 4x below the message.'
+  },
+  {
+    tab: 'Chat',
     section: 'Repeated Messages',
     sectionId: 'settings-section-repeated-messages',
     title: 'When a message repeats',
@@ -928,6 +934,12 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   },
   {
     tab: 'Overlay',
+    section: 'Stream Overlay',
+    title: 'Overlay profiles',
+    description: 'Run multiple overlays in different styles, each with its own OBS link. Create, duplicate, rename, and delete overlay profiles.'
+  },
+  {
+    tab: 'Overlay',
     section: 'Sources',
     title: 'Sources',
     description: 'Choose which platforms feed the overlay (Twitch, Kick, YouTube, TikTok) and whether to tag each message with its source platform.'
@@ -943,6 +955,12 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
     section: 'Emotes & Badges',
     title: 'Emotes and Badges',
     description: 'Emote size on the overlay and whether chatter badges are shown: platform badges, third-party badges (7TV, FFZ, Chatterino), the StreamNook member badge, 7TV paints, and atmospheres.'
+  },
+  {
+    tab: 'Overlay',
+    section: 'Emotes & Badges',
+    title: 'Giant emotes',
+    description: 'Render the last emote of a Gigantify power-up message at 4x below the message on the overlay.'
   },
   {
     tab: 'Overlay',

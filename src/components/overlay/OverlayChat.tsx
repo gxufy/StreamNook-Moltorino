@@ -42,12 +42,29 @@ const emoteUrlFromId = (id: string): string =>
     ? `https://cdn.7tv.app/emote/${id}/3x.webp`
     : `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/3.0`;
 
+// 4x-equivalent art for a gigantified emote. 7TV has a real 4x tier; Twitch
+// serves size 4.0 (legacy emotes alias 3.0, the CSS height upscales — same as
+// FFZ's client); BTTV tops out at 3x, FFZ at /4. Unknown CDNs upscale their
+// inline art.
+const giantEmoteUrl = (url: string, id?: string): string => {
+  if (id && is7tvId(id)) return `https://cdn.7tv.app/emote/${id}/4x.webp`;
+  if (id && /^\d+$/.test(id) && (!url || url.includes('jtvnw.net')))
+    return `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/4.0`;
+  if (url.includes('cdn.7tv.app')) return url.replace(/\/\dx(\.\w+)?$/, '/4x$1');
+  if (url.includes('jtvnw.net')) return url.replace(/\/[\d.]+$/, '/4.0');
+  if (url.includes('frankerfacez')) return url.replace(/\/[124]$/, '/4');
+  return url;
+};
+
 // Resolve an emote to a display URL: the baked URL if present, else rebuilt from the
 // id. On a load failure, retry the id-rebuilt URL once before falling back to the
-// text code — so a stale/wrong baked URL still resolves to a working image.
-const EmoteImg = ({ segment, emoteScale }: { segment: Extract<MessageSegment, { type: 'emote' }>; emoteScale: number }) => {
+// text code — so a stale/wrong baked URL still resolves to a working image. Giant
+// mode (gigantified emotes) swaps in the 4x art and 4x sizing, degrading to the
+// inline art upscaled if the big file fails.
+const EmoteImg = ({ segment, emoteScale, giant = false }: { segment: Extract<MessageSegment, { type: 'emote' }>; emoteScale: number; giant?: boolean }) => {
   const rebuilt = segment.emote_id ? emoteUrlFromId(segment.emote_id) : '';
-  const primary = preferRasterEmote(segment.emote_url) || rebuilt;
+  const inline = preferRasterEmote(segment.emote_url) || rebuilt;
+  const primary = giant ? preferRasterEmote(giantEmoteUrl(segment.emote_url || '', segment.emote_id)) || inline : inline;
   const [src, setSrc] = useState(primary);
   const [failed, setFailed] = useState(!primary);
   if (failed) return <span>{segment.content}</span>;
@@ -58,9 +75,10 @@ const EmoteImg = ({ segment, emoteScale }: { segment: Extract<MessageSegment, { 
       loading="lazy"
       referrerPolicy="no-referrer"
       className="inline-block w-auto align-middle"
-      style={{ height: `calc(2em * ${emoteScale})`, maxWidth: `calc(9em * ${emoteScale})`, margin: '0 0.125rem', verticalAlign: '-0.35em' }}
+      style={{ height: `calc(${giant ? 8 : 2}em * ${emoteScale})`, maxWidth: `calc(${giant ? 24 : 9}em * ${emoteScale})`, margin: '0 0.125rem', verticalAlign: '-0.35em' }}
       onError={() => {
-        if (rebuilt && src !== rebuilt) setSrc(rebuilt);
+        if (giant && inline && src !== inline) setSrc(inline);
+        else if (rebuilt && src !== rebuilt) setSrc(rebuilt);
         else setFailed(true);
       }}
     />
@@ -264,9 +282,9 @@ const renderTextWithEmoji = (text: string, style: string): ReactNode => {
   return out;
 };
 
-const OverlaySegment = ({ segment, emoteScale, emojiStyle = 'apple' }: { segment: MessageSegment; emoteScale: number; emojiStyle?: string }) => {
+const OverlaySegment = ({ segment, emoteScale, emojiStyle = 'apple', giant = false }: { segment: MessageSegment; emoteScale: number; emojiStyle?: string; giant?: boolean }) => {
   if (segment.type === 'emote') {
-    return <EmoteImg segment={segment} emoteScale={emoteScale} />;
+    return <EmoteImg segment={segment} emoteScale={emoteScale} giant={giant} />;
   }
   if (segment.type === 'emoji') {
     const uni = isUnicodeEmoji(segment.content);
@@ -637,6 +655,15 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
       const m = action.match(/(\d+)\s*months?/i);
       return m && !first.includes(`${m[1]} month`) ? `${first} for ${m[1]} months` : first;
     })();
+    // Watch streaks: use the app's own phrasing (system-msg is generic;
+    // msg-param-value carries the streak count) plus the earned channel points.
+    // The viewer's share message already renders as the drop line below.
+    const isWatchStreak = msgType === 'viewermilestone' && message.tags?.['msg-param-category'] === 'watch-streak';
+    const streakValue = isWatchStreak ? parseInt(message.tags?.['msg-param-value'] || '0', 10) : 0;
+    const streakPoints = isWatchStreak ? parseInt(message.tags?.['msg-param-copoReward'] || '0', 10) : 0;
+    const finalAction = isWatchStreak && streakValue > 0
+      ? `watched ${streakValue} consecutive streams and sparked a watch streak!`
+      : shownAction;
     // TikTok gifts carry the gift's own (often animated) image as an emote segment.
     // We drop TikTok's redundant TEXT body, but keep that image — it's the gift's
     // design — and render it inline on the event line.
@@ -681,7 +708,12 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
           }}
         >
           <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', height: '1.5em' }}>
-            {isPrime ? (
+            {isWatchStreak ? (
+              // Twitch's own fire glyph, matching the in-app watch-streak card.
+              <svg width="1em" height="1em" viewBox="0 0 20 20" fill="#fb923c" aria-hidden="true">
+                <path fillRule="evenodd" clipRule="evenodd" d="M11 4.5 9 2 4.8 6.9A7.48 7.48 0 0 0 3 11.77C3 15.2 5.8 18 9.23 18h1.65A6.12 6.12 0 0 0 17 11.88c0-1.86-.65-3.66-1.84-5.1L12 3l-1 1.5ZM6.32 8.2 9 5l2 2.5L12 6l1.62 2.07A5.96 5.96 0 0 1 15 11.88c0 2.08-1.55 3.8-3.56 4.08.36-.47.56-1.05.56-1.66 0-.52-.18-1.02-.5-1.43L10 11l-1.5 1.87c-.32.4-.5.91-.5 1.43 0 .6.2 1.18.54 1.64A4.23 4.23 0 0 1 5 11.77c0-1.31.47-2.58 1.32-3.57Z" />
+              </svg>
+            ) : isPrime ? (
               <svg width="1em" height="1em" viewBox="0 0 20 20" fill="#60a5fa" aria-hidden="true">
                 <path fillRule="evenodd" clipRule="evenodd" d="M18 5v8a2 2 0 0 1-2 2H4a2.002 2.002 0 0 1-2-2V5l4 3 4-4 4 4 4-3z" />
               </svg>
@@ -694,7 +726,16 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
                 event action; StreamNook style adds the signature multi-color wash. */}
             <div className="min-w-0">
               {nameAndBadges}
-              <span style={{ fontWeight: 400 }}> {shownAction}</span>
+              <span style={{ fontWeight: 400 }}> {finalAction}</span>
+              {streakPoints > 0 && (
+                <span style={{ color: '#fb923c', fontWeight: 700, marginLeft: '0.35em', whiteSpace: 'nowrap' }}>
+                  <svg width="0.9em" height="0.9em" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ display: 'inline', verticalAlign: '-0.1em', marginRight: '0.15em' }}>
+                    <path d="M12 5v2a5 5 0 0 1 5 5h2a7 7 0 0 0-7-7Z" />
+                    <path fillRule="evenodd" d="M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12Zm11 9a9 9 0 1 1 0-18 9 9 0 0 1 0 18Z" clipRule="evenodd" />
+                  </svg>
+                  +{streakPoints.toLocaleString()}
+                </span>
+              )}
               {giftSegments.map((seg, i) => (
                 <OverlaySegment key={`gift-${i}`} segment={seg} emoteScale={Math.max(style.emoteScale, 1)} emojiStyle={style.emojiStyle} />
               ))}
@@ -717,6 +758,25 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
         </div>
       </div>
     );
+  }
+
+  // Gigantified emote (Twitch "Gigantify an Emote" power-up, msg-id
+  // gigantified-emote-message): the LAST non-emoji, non-overlay emote leaves
+  // the inline flow and renders at 4x centered below the body, matching the
+  // in-app chat. The giant block sits OUTSIDE the line-clamped div so a
+  // maxMessageLines cap can never clip it.
+  const bodySegs: MessageSegment[] = message.segments ?? [{ type: 'text', content: message.content } as MessageSegment];
+  const isGigantified =
+    msgType === 'gigantified-emote-message' || message.tags?.['source-msg-id'] === 'gigantified-emote-message';
+  let giantIdx = -1;
+  if (isGigantified && style.giantEmotes !== false) {
+    for (let i = bodySegs.length - 1; i >= 0; i--) {
+      const s = bodySegs[i];
+      if (s.type === 'emote' && !s.is_zero_width) {
+        giantIdx = i;
+        break;
+      }
+    }
   }
 
   // Long-message clamp: cap the whole rendered line block at N lines with an
@@ -744,12 +804,19 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
           italic — the Twitch convention. */}
       {message.metadata?.is_action ? ' ' : <><span style={{ color, fontWeight: 700 }}>:</span>{' '}</>}
       <span style={{ fontWeight: 400, ...(message.metadata?.is_action ? { color, fontStyle: 'italic' } : null) }}>
-        {(message.segments ?? [{ type: 'text', content: message.content }]).map((seg, i) => (
-          <OverlaySegment key={i} segment={seg} emoteScale={style.emoteScale} emojiStyle={style.emojiStyle} />
+        {bodySegs.map((seg, i) => (
+          i === giantIdx ? null : <OverlaySegment key={i} segment={seg} emoteScale={style.emoteScale} emojiStyle={style.emojiStyle} />
         ))}
       </span>
     </div>
   );
+
+  // The plucked gigantified emote, centered below the message line.
+  const giantBlock = giantIdx >= 0 ? (
+    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.2em' }}>
+      <OverlaySegment segment={bodySegs[giantIdx]} emoteScale={style.emoteScale} emojiStyle={style.emojiStyle} giant />
+    </div>
+  ) : null;
 
   // Border accent animation for a first-time chatter's arrival (opt-in). It
   // rides the highlight's border only, never the fill: around the ring for the
@@ -870,6 +937,7 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
         ) : (
           line
         )}
+        {giantBlock}
       </div>
     </div>
   );
