@@ -128,6 +128,15 @@ function App() {
       unlistenSnippets?.();
     };
   }, []);
+  useEffect(() => {
+    // One-shot drops-token validation: the device-code token cannot be
+    // refreshed, and is_drops_authenticated only checks that a token file
+    // exists — so a revoked/expired token showed "connected" while earning
+    // nothing. validate_drops_token clears stored tokens ONLY on a real 401
+    // (a transport error rejects and changes nothing), so being offline at
+    // boot is safe. Fire and forget.
+    invoke('validate_drops_token').catch(() => {});
+  }, []);
   // Actions are stable for the store's lifetime, so read them without
   // subscribing. State goes through a shallow-compared selector. Previously this
   // was a bare `useAppStore()`, i.e. a subscription to the ENTIRE store — so

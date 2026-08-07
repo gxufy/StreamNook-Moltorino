@@ -154,17 +154,23 @@ impl WatchHeartbeatService {
                     target.broadcast_id = Some(broadcast_id);
                     target.game_id = game_id;
                     target.game_name = game_name;
+                    target.broadcast_checked_at = Some(Instant::now());
                 }
                 Ok(None) => {
                     // Channel is not live (offline, VOD, or ended). Nothing
                     // to report; re-check on the next stale window.
                     target.broadcast_id = None;
+                    target.broadcast_checked_at = Some(Instant::now());
                 }
                 Err(e) => {
+                    // A FAILED fetch must not refresh the stamp: stamping here
+                    // extended the stale broadcast_id's crediting window by a
+                    // full BROADCAST_REFRESH per failure, so a dead stream kept
+                    // earning against its old broadcast. Leaving the stamp
+                    // stale retries on the next tick instead.
                     debug!("[Heartbeat] stream info fetch failed: {e}");
                 }
             }
-            target.broadcast_checked_at = Some(Instant::now());
             // Write back the refreshed snapshot unless the target moved on.
             let mut current = self.target.write().await;
             match current.as_mut() {
