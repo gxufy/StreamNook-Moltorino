@@ -198,6 +198,10 @@ export interface ChatDesignSettings {
   // like BetterTTV's own client. Default true. Off renders the modifiers as
   // plain emotes.
   bttv_emote_modifiers?: boolean;
+  // Render the last emote of a "Gigantify an Emote" power-up message (msg-id
+  // gigantified-emote-message) at 4x below the message body, like Twitch does.
+  // Default true. Off renders the emote inline at its normal size.
+  giant_emotes?: boolean;
   // Which half of the user card opens first: their recent messages (default) or
   // the profile body. The card switches between the two either way.
   user_card_opens_messages?: boolean;

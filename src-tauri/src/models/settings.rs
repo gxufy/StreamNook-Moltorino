@@ -187,6 +187,10 @@ pub struct ChatDesignSettings {
     pub ffz_emote_effects: bool,
     #[serde(default = "default_true")]
     pub bttv_emote_modifiers: bool,
+    /// Render the last emote of a "Gigantify an Emote" power-up message
+    /// (msg-id gigantified-emote-message) at 4x below the message body.
+    #[serde(default = "default_true")]
+    pub giant_emotes: bool,
     /// Which half of the user card opens first: their recent messages (default)
     /// or the profile body.
     #[serde(default = "default_true")]
@@ -276,6 +280,7 @@ impl Default for ChatDesignSettings {
             compact_emote_tooltips: false,
             ffz_emote_effects: true,
             bttv_emote_modifiers: true,
+            giant_emotes: true,
             user_card_opens_messages: true,
             seventv_emote_notices: true,
             link_previews: true,

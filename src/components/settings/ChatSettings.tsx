@@ -294,6 +294,7 @@ const ChatSettings = ({ hidePlacement = false }: { hidePlacement?: boolean } = {
     compact_emote_tooltips: stored?.compact_emote_tooltips ?? false,
     ffz_emote_effects: stored?.ffz_emote_effects ?? true,
     bttv_emote_modifiers: stored?.bttv_emote_modifiers ?? true,
+    giant_emotes: stored?.giant_emotes ?? true,
     user_card_opens_messages: stored?.user_card_opens_messages ?? true,
     seventv_emote_notices: stored?.seventv_emote_notices ?? true,
     link_previews: stored?.link_previews ?? true,
@@ -1097,6 +1098,17 @@ const ChatSettings = ({ hidePlacement = false }: { hidePlacement?: boolean } = {
             <Toggle
               enabled={cd.bttv_emote_modifiers}
               onChange={() => setDesign({ bttv_emote_modifiers: !cd.bttv_emote_modifiers })}
+            />
+          }
+        />
+
+        <SettingsRow
+          title="Giant emotes"
+          description={'Render the last emote of a "Gigantify an Emote" power-up message at 4x below the message, like Twitch does. Off shows the emote inline at its normal size.'}
+          control={
+            <Toggle
+              enabled={cd.giant_emotes}
+              onChange={() => setDesign({ giant_emotes: !cd.giant_emotes })}
             />
           }
         />

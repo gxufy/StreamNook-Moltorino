@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useRef, memo, useSyncExternalStore
 import { Gift } from 'lucide-react';
 import { Tooltip } from './ui/Tooltip';
 import { parseMessage } from '../services/twitchChat';
-import { queueEmoteForDisplayCaching, getCachedEmoteUrl, inlineEmoteTier, EmoteSet, Emote } from '../services/emoteService';
+import { queueEmoteForDisplayCaching, getCachedEmoteUrl, inlineEmoteTier, sevenTvTierUrl, EmoteSet, Emote } from '../services/emoteService';
 import { getCachedEmojiUrl, parseEmojisSync } from '../services/emojiService';
 import { calculateHalfPadding } from '../utils/chatLayoutUtils';
 import { computePaintStyle, getBadgeImageUrl, getBadgeFallbackUrls, queueCosmeticForCaching } from '../services/seventvService';
@@ -129,6 +129,23 @@ const wrapWithEmoteEffects = (
       {out}
     </span>
   );
+};
+
+// Giant (gigantified) emote sizing: 4x the 2em inline height (112px at the
+// default 14px chat font, matching FFZ), tracking font size and emote scale.
+const GIANT_EMOTE_HEIGHT = 'calc(8em * var(--sn-emote-scale, 1))';
+const GIANT_EMOTE_MAX_WIDTH = 'calc(24em * var(--sn-emote-scale, 1))';
+
+// Best 4x-equivalent CDN URL per provider. Twitch `default` serves the
+// animated variant automatically; BTTV tops out at 3x; FFZ /4 may fail for
+// some emotes (onError falls back to the inline URL).
+const giantEmoteCdnUrl = (url: string, provider: string | undefined, id?: string): string => {
+  if (provider === 'twitch' && id)
+    return `https://static-cdn.jtvnw.net/emoticons/v2/${id}/default/dark/4.0`;
+  if (provider === '7tv' && id) return sevenTvTierUrl(id, '4x');
+  if (provider === 'bttv' && id) return `https://cdn.betterttv.net/emote/${id}/3x`;
+  if (provider === 'ffz') return url.replace(/\/[124]$/, '/4');
+  return url;
 };
 
 // FFZ GrowX (ffzW) stretches the target emote to double width. The natural
@@ -1068,6 +1085,9 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
     // the tooltip (hidden modifiers render no img, so this is the only place
     // their presence is explained).
     mods?: { growX?: boolean; wideX?: boolean; rotated?: boolean; modifierNames?: string[] },
+    // Gigantified render: 4x-size art and 8em sizing for the plucked emote
+    // (and its whole group, so overlays keep covering their base).
+    giant: boolean = false,
   ) => {
     const gridStyle = inGrid ? { gridArea: '1/1' } : {};
     const marginClass = inGrid ? '' : 'mx-0.5';
@@ -1086,7 +1106,7 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
           !emoteUrl.includes('frankerfacez') &&
           !emoteUrl.includes('betterttv'))
       );
-      const emoteTier = inlineEmoteTier();
+      const emoteTier = giant ? ('4x' as const) : inlineEmoteTier();
 
       // Resolve the real provider so the cache key matches the provider-
       // namespaced key the picker + prefetch write (otherwise disk-first
@@ -1101,15 +1121,23 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
               ? 'ffz'
               : undefined;
 
+      // Giant art URL. Only 7TV cache keys are per-tier; the other providers
+      // key by bare id, so caching 4x bytes there would overwrite the
+      // inline-size file (gigantified messages are rare, one CDN fetch is
+      // fine).
+      const displayUrl = giant
+        ? giantEmoteCdnUrl(emoteUrl, emoteProvider, segment.emoteId)
+        : emoteUrl;
+
       // Disk-first: prefer the on-disk copy at the rendered tier. On a miss,
       // queue it for caching (per-tier for 7TV) so the NEXT view is local.
       // This is what makes returning to a stream fast instead of re-pulling
       // every emote from the CDN.
-      const cachedEmoteUrl = segment.emoteId
+      const cachedEmoteUrl = segment.emoteId && (!giant || emoteProvider === '7tv')
         ? getCachedEmoteUrl(segment.emoteId, emoteProvider, emoteTier)
         : undefined;
-      if (!cachedEmoteUrl && emoteUrl && !emoteUrl.startsWith('asset://') && !emoteUrl.includes('asset.localhost') && segment.emoteId) {
-        queueEmoteForDisplayCaching(segment.emoteId, emoteProvider, emoteUrl, emoteTier);
+      if (!cachedEmoteUrl && displayUrl && !displayUrl.startsWith('asset://') && !displayUrl.includes('asset.localhost') && segment.emoteId && (!giant || emoteProvider === '7tv')) {
+        queueEmoteForDisplayCaching(segment.emoteId, emoteProvider, displayUrl, emoteTier);
       }
 
       // If it's an overlay (zero-width inside grid), it naturally sits on top and doesn't need negative margins
@@ -1118,11 +1146,11 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
       // NOT serving a fixed-size disk file (a local file is one resolution, so
       // srcSet would be meaningless and could re-pull from the network).
       let srcSet: string | undefined = undefined;
-      if (!cachedEmoteUrl && is7TVEmote && segment.emoteId) {
+      if (!giant && !cachedEmoteUrl && is7TVEmote && segment.emoteId) {
         srcSet = `https://cdn.7tv.app/emote/${segment.emoteId}/1x.avif 1x, https://cdn.7tv.app/emote/${segment.emoteId}/2x.avif 2x, https://cdn.7tv.app/emote/${segment.emoteId}/3x.avif 3x, https://cdn.7tv.app/emote/${segment.emoteId}/4x.avif 4x`;
       }
 
-      const displaySrc = cachedEmoteUrl || emoteUrl;
+      const displaySrc = cachedEmoteUrl || displayUrl;
 
       const imgProps: React.ImgHTMLAttributes<HTMLImageElement> = {
         src: displaySrc,
@@ -1137,16 +1165,20 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
           ...gridStyle,
           // In chat, size emotes in `em` so they scale with the message font;
           // the picker grid keeps its fixed rem size.
-          height: inGrid
-            ? 'calc(1.75rem * var(--sn-emote-scale, 1))'
-            : 'calc(2em * var(--sn-emote-scale, 1))',
-          maxWidth: inGrid
-            ? 'calc(128px * var(--sn-emote-scale, 1))'
-            : 'calc(9em * var(--sn-emote-scale, 1))',
+          height: giant
+            ? GIANT_EMOTE_HEIGHT
+            : inGrid
+              ? 'calc(1.75rem * var(--sn-emote-scale, 1))'
+              : 'calc(2em * var(--sn-emote-scale, 1))',
+          maxWidth: giant
+            ? GIANT_EMOTE_MAX_WIDTH
+            : inGrid
+              ? 'calc(128px * var(--sn-emote-scale, 1))'
+              : 'calc(9em * var(--sn-emote-scale, 1))',
           ...(inGrid ? {} : { marginLeft: 'var(--sn-emote-margin, 0.125rem)', marginRight: 'var(--sn-emote-margin, 0.125rem)' }),
           // Must come last: a rotated emote is squared off first, exactly as
           // BetterTTV does it, so the turned image cannot spill vertically.
-          ...(mods?.rotated ? { maxWidth: 'calc(1.75rem * var(--sn-emote-scale, 1))' } : {}),
+          ...(mods?.rotated ? { maxWidth: giant ? GIANT_EMOTE_HEIGHT : 'calc(1.75rem * var(--sn-emote-scale, 1))' } : {}),
         },
         referrerPolicy: 'no-referrer',
         onClick: () => {
@@ -1163,6 +1195,14 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
         },
         onError: (e) => {
           const t = e.currentTarget;
+          // Giant 4x URL failed: retry once with the inline-size URL upscaled
+          // (FFZ-equivalent degradation) before the cache/CDN ladder below.
+          if (giant && displayUrl !== emoteUrl && !t.dataset.giantFallback) {
+            t.dataset.giantFallback = '1';
+            t.srcset = '';
+            t.src = emoteUrl;
+            return;
+          }
           // A stale/missing disk file falls back to the CDN once (tier for
           // 7TV, base otherwise) before we give up and show the text code.
           if (cachedEmoteUrl && !t.dataset.cdnFallback) {
@@ -1184,12 +1224,12 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
       const imgElement = mods?.wideX ? (
         <WideEmoteImg
           {...imgProps}
-          baseHeight={'calc(1.75rem * var(--sn-emote-scale, 1))'}
+          baseHeight={giant ? GIANT_EMOTE_HEIGHT : 'calc(1.75rem * var(--sn-emote-scale, 1))'}
         />
       ) : mods?.growX ? (
         <GrowXEmoteImg
           {...imgProps}
-          baseHeight={'calc(1.75rem * var(--sn-emote-scale, 1))'}
+          baseHeight={giant ? GIANT_EMOTE_HEIGHT : 'calc(1.75rem * var(--sn-emote-scale, 1))'}
         />
       ) : (
         <img {...imgProps} />
@@ -1363,11 +1403,11 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
     );
   };
 
-  const renderContent = (segments: EmoteSegment[]) => {
-    // Phase 1: Group modifier and zero-width emotes with their target. FFZ
-    // modifiers and 7TV/BTTV overlays attach BACKWARD (look-back, below);
-    // BetterTTV modifiers attach FORWARD, so they are buffered until their
-    // target arrives.
+  // Phase 1: Group modifier and zero-width emotes with their target. FFZ
+  // modifiers and 7TV/BTTV overlays attach BACKWARD (look-back, below);
+  // BetterTTV modifiers attach FORWARD, so they are buffered until their
+  // target arrives.
+  const groupSegments = (segments: EmoteSegment[]): (EmoteSegment | EmoteSegment[])[] => {
     const groupedSegments: (EmoteSegment | EmoteSegment[])[] = [];
 
     const bttvModsOn = chatDesign?.bttv_emote_modifiers !== false;
@@ -1455,73 +1495,113 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
       }
     });
     flushPending();
+    return groupedSegments;
+  };
 
-    // Phase 2: Render groups. Member 0 is the target: it always draws its own
-    // art and contributes no flags (an orphan modifier therefore renders as a
-    // normal emote, matching both FFZ and BetterTTV). Members 1..n are the
-    // attached overlays / modifiers: a modifier with the Hidden bit renders no
-    // image and instead contributes its effect to the whole group.
-    const ffzEffectsOn = settings?.chat_design?.ffz_emote_effects !== false;
-    // Which toggle owns a member is read off MOD_PREFIX: BetterTTV modifiers
-    // always set it, FFZ modifiers never do. BetterTTV needs no check here
-    // because Phase 1 already keeps its modifiers out of groups when its
-    // toggle is off.
-    const memberContributes = (seg: EmoteSegment) =>
-      ((seg.modifierFlags ?? 0) & MOD_PREFIX) !== 0 || ffzEffectsOn;
+  // Phase 2: Render groups. Member 0 is the target: it always draws its own
+  // art and contributes no flags (an orphan modifier therefore renders as a
+  // normal emote, matching both FFZ and BetterTTV). Members 1..n are the
+  // attached overlays / modifiers: a modifier with the Hidden bit renders no
+  // image and instead contributes its effect to the whole group.
+  const ffzEffectsOn = settings?.chat_design?.ffz_emote_effects !== false;
+  // Which toggle owns a member is read off MOD_PREFIX: BetterTTV modifiers
+  // always set it, FFZ modifiers never do. BetterTTV needs no check here
+  // because Phase 1 already keeps its modifiers out of groups when its
+  // toggle is off.
+  const memberContributes = (seg: EmoteSegment) =>
+    ((seg.modifierFlags ?? 0) & MOD_PREFIX) !== 0 || ffzEffectsOn;
 
-    return groupedSegments.map((group, index) => {
-      if (Array.isArray(group)) {
-        const aggFlags = group
-          .slice(1)
-          .reduce((acc, seg) => (memberContributes(seg) ? acc | (seg.modifierFlags ?? 0) : acc), 0);
-        // Effect bits only. Hidden alone (legacy overlay modifiers) needs no
-        // wrapper, and MOD_PREFIX is a routing marker rather than an effect,
-        // so neither may force the wrapper path.
-        const effectBits = aggFlags & ~MOD_NON_EFFECT_BITS;
-        const growX = (effectBits & MOD_GROW_X) !== 0;
-        const rotated = (effectBits & (MOD_BTTV_ROTATE_L | MOD_BTTV_ROTATE_R)) !== 0;
-        // Rotating beats widening, because in BetterTTV the rotate rule's
-        // max-width overrides the wide rule's width. Without this a rotated
-        // wide emote would stand 4 lines tall and spill over its neighbours.
-        const wideX = (effectBits & MOD_BTTV_WIDE) !== 0 && !rotated;
-        const modifierNames = group
-          .slice(1)
-          .filter((s) => s.modifierFlags != null && memberContributes(s))
-          .map((s) => s.content);
+  const renderGroup = (
+    group: EmoteSegment | EmoteSegment[],
+    index: number,
+    giant: boolean = false,
+  ): React.ReactNode => {
+    if (Array.isArray(group)) {
+      const aggFlags = group
+        .slice(1)
+        .reduce((acc, seg) => (memberContributes(seg) ? acc | (seg.modifierFlags ?? 0) : acc), 0);
+      // Effect bits only. Hidden alone (legacy overlay modifiers) needs no
+      // wrapper, and MOD_PREFIX is a routing marker rather than an effect,
+      // so neither may force the wrapper path.
+      const effectBits = aggFlags & ~MOD_NON_EFFECT_BITS;
+      const growX = (effectBits & MOD_GROW_X) !== 0;
+      const rotated = (effectBits & (MOD_BTTV_ROTATE_L | MOD_BTTV_ROTATE_R)) !== 0;
+      // Rotating beats widening, because in BetterTTV the rotate rule's
+      // max-width overrides the wide rule's width. Without this a rotated
+      // wide emote would stand 4 lines tall and spill over its neighbours.
+      const wideX = (effectBits & MOD_BTTV_WIDE) !== 0 && !rotated;
+      const modifierNames = group
+        .slice(1)
+        .filter((s) => s.modifierFlags != null && memberContributes(s))
+        .map((s) => s.content);
 
-        const gridSpan = (
-          <span
-            key={effectBits ? undefined : `group-${index}`}
-            className={`inline-grid items-center justify-items-center ${effectBits ? '' : 'align-middle mx-0.5'}`}
-          >
-            {group.map((seg, innerIndex) => {
-              const hiddenModifier =
-                innerIndex > 0 &&
-                memberContributes(seg) &&
-                ((seg.modifierFlags ?? 0) & MOD_HIDDEN) !== 0;
-              if (hiddenModifier) return null;
-              return renderSegment(
-                seg,
-                `${index}-${innerIndex}`,
-                true,
-                innerIndex > 0,
-                innerIndex === 0
-                  ? {
-                      growX,
-                      wideX,
-                      rotated,
-                      modifierNames: modifierNames.length ? modifierNames : undefined,
-                    }
-                  : undefined,
-              );
-            })}
-          </span>
-        );
-        if (!effectBits) return gridSpan;
-        return wrapWithEmoteEffects(gridSpan, effectBits, `group-${index}`, index > 0);
+      const gridSpan = (
+        <span
+          key={effectBits ? undefined : `group-${index}`}
+          className={`inline-grid items-center justify-items-center ${effectBits ? '' : 'align-middle mx-0.5'}`}
+        >
+          {group.map((seg, innerIndex) => {
+            const hiddenModifier =
+              innerIndex > 0 &&
+              memberContributes(seg) &&
+              ((seg.modifierFlags ?? 0) & MOD_HIDDEN) !== 0;
+            if (hiddenModifier) return null;
+            return renderSegment(
+              seg,
+              `${index}-${innerIndex}`,
+              true,
+              innerIndex > 0,
+              innerIndex === 0
+                ? {
+                    growX,
+                    wideX,
+                    rotated,
+                    modifierNames: modifierNames.length ? modifierNames : undefined,
+                  }
+                : undefined,
+              giant,
+            );
+          })}
+        </span>
+      );
+      if (!effectBits) return gridSpan;
+      return wrapWithEmoteEffects(gridSpan, effectBits, `group-${index}`, index > 0);
+    }
+    return renderSegment(group, index.toString(), false, false, undefined, giant);
+  };
+
+  const renderContent = (segments: EmoteSegment[]) =>
+    groupSegments(segments).map((g, i) => renderGroup(g, i));
+
+  // Gigantified emote (Twitch "Gigantify an Emote" power-up, msg-id
+  // gigantified-emote-message): the LAST non-emoji emote leaves the inline
+  // flow and renders at 4x in a block below the body, matching Twitch and
+  // FFZ. The pluck operates on GROUPS so zero-width overlays and FFZ/BTTV
+  // modifiers attached to the emote move down with it instead of being
+  // orphaned inline.
+  const pluckGiantEmote = (
+    segments: EmoteSegment[],
+  ): { inline: React.ReactNode; giant: React.ReactNode | null } => {
+    const groups = groupSegments(segments);
+    let giantIdx = -1;
+    for (let i = groups.length - 1; i >= 0; i--) {
+      const g = groups[i];
+      const base = Array.isArray(g) ? g[0] : g;
+      // Emoji are never gigantified; a bare modifier is an attachment rather
+      // than a target, and an orphan zero-width overlay must not become the
+      // giant either.
+      if (base.type === 'emote' && base.modifierFlags == null && !base.isZeroWidth) {
+        giantIdx = i;
+        break;
       }
-      return renderSegment(group, index.toString(), false, false);
-    });
+    }
+    if (giantIdx === -1) {
+      return { inline: groups.map((g, i) => renderGroup(g, i)), giant: null };
+    }
+    return {
+      inline: groups.filter((_, i) => i !== giantIdx).map((g, i) => renderGroup(g, i)),
+      giant: renderGroup(groups[giantIdx], giantIdx, true),
+    };
   };
 
   // Helper function to detect URLs and @mentions, making them styled and clickable
@@ -1795,6 +1875,14 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
     // Format bits count with commas for readability
     const formattedBits = bitsCount.toLocaleString();
 
+    // Defensive: EventSub shows gigantified messages arrive with cheer:null,
+    // but `bits` is a plain IRC tag; if both ever co-occur, the giant must
+    // not be silently dropped by this early return.
+    const giantPluckCheer =
+      isGigantifiedEmote && chatDesign?.giant_emotes !== false
+        ? pluckGiantEmote(contentWithEmotes)
+        : null;
+
     // Determine bits tier color based on amount (matching Twitch's color scheme)
     const getBitsTierColor = (bits: number): string => {
       if (bits >= 10000) return '#ff1f1f'; // Red
@@ -1805,6 +1893,12 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
     };
 
     const bitsTierColor = getBitsTierColor(bitsCount);
+
+    // Twitch's own animated bits gem for this tier (same CDN pattern the Rust
+    // cheermote parser builds); tier thresholds mirror getBitsTierColor.
+    const bitsTier =
+      bitsCount >= 10000 ? '10000' : bitsCount >= 5000 ? '5000' : bitsCount >= 1000 ? '1000' : bitsCount >= 100 ? '100' : '1';
+    const bitsAnimUrl = `https://d3aqoihi2n8ty8.cloudfront.net/actions/cheer/dark/animated/${bitsTier}/2.gif`;
 
     // Helper function to render username as clickable. Render path uses the
     // effective display name (so nicknames apply); the click payload keeps
@@ -1923,12 +2017,16 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
       <div key={messageId} className="px-3 border-t border-borderSubtle bits-gradient" style={{ paddingTop: `${eventPadding}px`, paddingBottom: `${eventPadding}px` }}>
         <div className="flex items-center gap-2.5">
           <div className="flex-shrink-0">
-            {/* Bits/gem icon */}
-            <svg className="w-5 h-5" viewBox="0 0 20 20" fill={bitsTierColor}>
-              <path d="M10 2L3 10l7 8 7-8-7-8z" />
-              <path d="M10 2L3 10h14L10 2z" opacity="0.7" />
-              <path d="M10 18l7-8H3l7 8z" opacity="0.5" />
-            </svg>
+            {/* Twitch's animated bits gem for the tier */}
+            <img
+              src={bitsAnimUrl}
+              alt=""
+              className="w-5 h-5 object-contain"
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
           </div>
           <div
             className="flex-1 min-w-0 flex flex-col leading-relaxed"
@@ -1941,8 +2039,11 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
             </p>
             {parsed.content && (
               <p className="text-textSecondary mt-1 leading-relaxed break-words">
-                {renderContent(contentWithEmotes)}
+                {giantPluckCheer ? giantPluckCheer.inline : renderContent(contentWithEmotes)}
               </p>
+            )}
+            {giantPluckCheer?.giant && (
+              <div className="mt-1 flex justify-center">{giantPluckCheer.giant}</div>
             )}
           </div>
         </div>
@@ -2733,6 +2834,14 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
     paddingBottom: `${Math.max(4, messageSpacing / 2)}px`,
   };
 
+  // Giant emote pluck for the main render path (the cheer branch above
+  // computes its own). OFF, or no pluckable emote, leaves the render
+  // identical to the pre-feature output.
+  const giantPluck =
+    isGigantifiedEmote && chatDesign?.giant_emotes !== false
+      ? pluckGiantEmote(contentWithEmotes)
+      : null;
+
   // Determine animation class and border color. Mentions/replies to you take
   // precedence over phrase/built-in highlights. The flash is gated on the
   // mention_animation toggle, but the chosen color always paints the left
@@ -3128,7 +3237,7 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
                     )}
                   </span>
                 </Tooltip>
-                {' '}{renderContent(contentWithEmotes)}
+                {' '}{giantPluck ? giantPluck.inline : renderContent(contentWithEmotes)}
               </span>
             ) : (
               // Regular messages: username in color, content in default color
@@ -3180,7 +3289,7 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
                         : undefined
                     }
                   >
-                    {' '}{renderContent(contentWithEmotes)}
+                    {' '}{giantPluck ? giantPluck.inline : renderContent(contentWithEmotes)}
                   </span>
                   {redemptionCost && (
                     <span className="inline-flex items-center gap-0.5 ml-1 align-middle text-highlight-cyan/90 font-medium">
@@ -3222,6 +3331,14 @@ const ChatMessage = memo(function ChatMessageInner({ message, onUsernameClick, o
           </span>
         </div>
       </div>
+      {/* Gigantified emote: the plucked last emote at 4x, block-level below
+          the body (same tier as link previews / SongCard). fontSize matches
+          the body so the em-based giant height tracks the chat font setting. */}
+      {giantPluck?.giant && (
+        <div className="mt-1 flex justify-center" style={{ fontSize: `${chatDesign?.font_size ?? 14}px` }}>
+          {giantPluck.giant}
+        </div>
+      )}
       {/* Inline link preview cards. Trusted links auto-expand; untrusted links
           render a click-to-load chip (trusted={false}). showChip (the no-preview
           fallback link chip) applies only to trusted links in clean mode, where
