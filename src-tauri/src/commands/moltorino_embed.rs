@@ -214,6 +214,20 @@ pub fn should_refit_child(host: (i32, i32), child: (i32, i32)) -> bool {
     child != host
 }
 
+/// Build the flags used whenever the attached child is fit to its host.
+///
+/// `SWP_NOSENDCHANGING` is critical for Qt clients whose minimum-size handling
+/// in `WM_WINDOWPOSCHANGING` would otherwise override the host's exact width.
+#[cfg(windows)]
+fn child_fit_flags(
+    extra: windows::Win32::UI::WindowsAndMessaging::SET_WINDOW_POS_FLAGS,
+) -> windows::Win32::UI::WindowsAndMessaging::SET_WINDOW_POS_FLAGS {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SWP_NOACTIVATE, SWP_NOSENDCHANGING, SWP_NOZORDER,
+    };
+    SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSENDCHANGING | extra
+}
+
 /// Whether a WinEvent's window handle refers to the child we're currently
 /// embedding, used to filter the `EVENT_OBJECT_LOCATIONCHANGE` callback.
 ///
@@ -236,8 +250,8 @@ pub fn is_current_child(event_hwnd: isize, current_child: Option<isize>) -> bool
 #[cfg(windows)]
 mod imp {
     use super::{
-        build_set_channel_json, host_client_size, is_current_child, parse_created_window,
-        should_refit_child,
+        build_set_channel_json, child_fit_flags, host_client_size, is_current_child,
+        parse_created_window, should_refit_child,
     };
     use crate::commands::moltorino::{
         display_path, is_valid_twitch_login, resolve_moltorino_runtime,
@@ -480,9 +494,8 @@ mod imp {
         );
     }
 
-    /// Size `child` to exactly fill `host`'s client area and pin it to the top of
-    /// the host's z-order, applying `extra_flags` on top of the always-present
-    /// `SWP_NOACTIVATE | HWND_TOP`.
+    /// Size `child` to exactly fill `host`'s client area, applying `extra_flags`
+    /// on top of the always-present no-z-order/no-activate/no-size-negotiation flags.
     ///
     /// This is the single place the embedded child is ever sized. It reads the
     /// host's *live* client rectangle with `GetClientRect` rather than trusting a
@@ -517,12 +530,12 @@ mod imp {
 
         if let Err(e) = SetWindowPos(
             child,
-            Some(HWND_TOP),
+            None,
             0,
             0,
             w,
             h,
-            SWP_NOACTIVATE | extra_flags,
+            child_fit_flags(extra_flags),
         ) {
             log::warn!(
                 "[Moltorino] embed fit_child: SetWindowPos(child={:#x}) to ({w}x{h}) failed: {e:?}",
@@ -2129,6 +2142,23 @@ mod tests {
             host_client_size((i32::MIN, i32::MIN, i32::MAX, i32::MAX)),
             (i32::MAX, i32::MAX)
         );
+    }
+
+    // --- Attached-child SetWindowPos flags -----------------------------------
+
+    #[cfg(windows)]
+    #[test]
+    fn child_fit_flags_bypass_qt_minimum_size_negotiation() {
+        use super::child_fit_flags;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOSENDCHANGING, SWP_NOZORDER,
+        };
+
+        let flags = child_fit_flags(SWP_FRAMECHANGED);
+        assert_eq!(flags & SWP_NOZORDER, SWP_NOZORDER);
+        assert_eq!(flags & SWP_NOACTIVATE, SWP_NOACTIVATE);
+        assert_eq!(flags & SWP_NOSENDCHANGING, SWP_NOSENDCHANGING);
+        assert_eq!(flags & SWP_FRAMECHANGED, SWP_FRAMECHANGED);
     }
 
     // --- WinEvent-driven refit decision (should_refit_child) -----------------
