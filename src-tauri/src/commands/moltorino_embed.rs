@@ -365,12 +365,25 @@ mod imp {
         /// instead of flooding the message queue. Cleared when that message is
         /// handled.
         refit_pending: bool,
+        /// Completion signal for the synchronous app-exit path. `WM_DESTROY` sends
+        /// on this once teardown has fully run (child killed+reaped, window
+        /// destroyed) just before the state is dropped; dropping the state also
+        /// disconnects the channel, so [`stop_blocking`] observes completion even
+        /// on a teardown path that somehow bypasses the explicit send. Held only so
+        /// its send/Drop reaches the paired `done_rx`; never read here.
+        done_tx: Sender<()>,
     }
 
     /// What the command layer keeps so it can reach a running host.
     struct EmbedHandle {
         host: isize,
         tx: Sender<Cmd>,
+        /// Fired by the message-loop thread from `WM_DESTROY` once teardown is
+        /// fully done (child killed+reaped, window destroyed). The synchronous
+        /// app-exit path ([`stop_blocking`]) waits on this so StreamNook never
+        /// exits out from under a not-yet-killed Moltorino — the race that left an
+        /// orphaned embedded process behind.
+        done_rx: Receiver<()>,
     }
 
     fn embed() -> &'static Mutex<Option<EmbedHandle>> {
@@ -394,6 +407,9 @@ mod imp {
         /// out, this lets it still reach the (real, already-created) host to tear
         /// it down, so a window/process we created can never be orphaned.
         host_slot: Arc<AtomicIsize>,
+        /// Moved into `HostState` and fired from `WM_DESTROY` so the synchronous
+        /// app-exit path can block until this host's teardown has fully completed.
+        done_tx: Sender<()>,
     }
 
     const CLASS_NAME: PCWSTR = w!("StreamNookMoltorinoEmbedHost");
@@ -1317,6 +1333,16 @@ mod imp {
                     let state = &mut *ptr;
                     remove_win_event_hook(state, "wm-destroy");
                     HOST_HWND.with(|h| h.set(0));
+                    // Signal the synchronous app-exit path that teardown is fully
+                    // done: by the time any path reaches WM_DESTROY the child has
+                    // already been killed+reaped (Cmd::Shutdown / attach-failed /
+                    // WM_APP_EXITED all do that before calling DestroyWindow), so a
+                    // waiter unblocked here knows no Moltorino is left behind. The
+                    // send is best-effort — if `stop_blocking` already timed out and
+                    // dropped its receiver this is a harmless no-op. (The subsequent
+                    // drop of `done_tx` with the state would disconnect the channel
+                    // anyway, so completion is signalled either way.)
+                    let _ = state.done_tx.send(());
                     // Reclaim and drop the boxed state (closes the channel, drops
                     // any surviving child handle).
                     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
@@ -1401,6 +1427,7 @@ mod imp {
                 applied_hole: None,
                 win_event_hook: None,
                 refit_pending: false,
+                done_tx: init.done_tx,
             });
             let state_raw = Box::into_raw(boxed);
 
@@ -1457,6 +1484,17 @@ mod imp {
                 }
                 Ok(child) => {
                     let pid = child.id();
+                    // Assign to the shared crash-safe Job Object before we store the
+                    // handle, so an abnormal StreamNook exit (crash/kill) still takes
+                    // this embedded Moltorino down with it. Best-effort by exact
+                    // process handle; the normal route stays the explicit kill+wait
+                    // on `child_proc` in the Shutdown/attach-failed/exit paths.
+                    {
+                        use std::os::windows::io::AsRawHandle;
+                        crate::commands::moltorino::jobobject::assign(
+                            child.as_raw_handle() as isize
+                        );
+                    }
                     (*state_raw).child_proc = Some(child);
                     spawn_exit_watcher(pid, hwnd.0 as isize);
                 }
@@ -1566,6 +1604,10 @@ mod imp {
 
         let (cmd_tx, cmd_rx) = std::sync::mpsc::channel::<Cmd>();
         let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<isize, String>>();
+        // Fired by the message-loop thread from WM_DESTROY once teardown is fully
+        // complete. `stop_blocking` (app exit) waits on it so we never race the OS
+        // tearing StreamNook down before the child is killed. Kept in the handle.
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<()>();
         // Shared slot the thread fills the instant its window exists. We keep our
         // own clone so that if the readiness wait times out we can still find and
         // tear down the (real, already-created) host instead of orphaning it.
@@ -1579,12 +1621,17 @@ mod imp {
             rx: cmd_rx,
             app,
             host_slot: host_slot.clone(),
+            done_tx,
         };
         std::thread::spawn(move || thread_main(init, ready_tx));
 
         match ready_rx.recv_timeout(std::time::Duration::from_secs(5)) {
             Ok(Ok(host)) => {
-                *guard = Some(EmbedHandle { host, tx: cmd_tx });
+                *guard = Some(EmbedHandle {
+                    host,
+                    tx: cmd_tx,
+                    done_rx,
+                });
                 Ok(())
             }
             Ok(Err(e)) => Err(e),
@@ -1646,6 +1693,12 @@ mod imp {
     }
 
     /// Tear down the host (kill our process, destroy our window). Idempotent.
+    ///
+    /// Non-blocking: it posts `Cmd::Shutdown` and returns immediately, letting the
+    /// message-loop thread do the kill+wait+destroy. This is the right shape for
+    /// the UI-driven path (`moltorino_embed_stop`), which runs on the async
+    /// runtime and must not block it. The app-exit path uses [`stop_blocking`]
+    /// instead, which waits for the teardown to actually finish.
     pub fn stop() -> Result<(), String> {
         let mut guard = embed()
             .lock()
@@ -1655,6 +1708,56 @@ mod imp {
             wake(handle.host);
         }
         Ok(())
+    }
+
+    /// Synchronous teardown for application exit. Posts `Cmd::Shutdown`, wakes the
+    /// message-loop thread, then *waits* for that thread to confirm it has killed
+    /// and reaped Moltorino and destroyed the host window (signalled via
+    /// `done_rx`). This closes the shutdown race that left an orphaned embedded
+    /// Moltorino behind: previously `stop()` only posted the command and returned,
+    /// so StreamNook could exit — and the OS tear the process down — before the
+    /// thread had run the kill.
+    ///
+    /// Bounded wait: if the thread doesn't confirm within the timeout (a wedged
+    /// Moltorino message pump, say), we log and return rather than hang shutdown.
+    /// The Job Object backstop still guarantees the child dies moments later when
+    /// our process — and thus our sole job handle — goes away. Never panics.
+    pub fn stop_blocking() {
+        // Take the handle out under the lock, then release the lock before we block
+        // on `done_rx`, so nothing else can deadlock behind a shutdown that's
+        // waiting on the message-loop thread.
+        let handle = match embed().lock() {
+            Ok(mut guard) => guard.take(),
+            Err(_) => {
+                log::warn!("[Moltorino] embed lock poisoned during exit; skipping embed teardown");
+                return;
+            }
+        };
+        let Some(handle) = handle else {
+            return; // Never started, or already torn down.
+        };
+        // If the send fails the thread is already gone (window destroyed), so
+        // teardown has effectively completed; don't wait on a dead channel.
+        if handle.tx.send(Cmd::Shutdown).is_err() {
+            return;
+        }
+        wake(handle.host);
+        match handle
+            .done_rx
+            .recv_timeout(std::time::Duration::from_secs(3))
+        {
+            Ok(()) => {}
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                // Thread dropped its sender without signalling — it has exited, so
+                // the window/process are gone. Nothing left to wait for.
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                log::warn!(
+                    "[Moltorino] embedded host didn't confirm teardown within 3s; \
+                     relying on the Job Object to reap it at process exit"
+                );
+            }
+        }
     }
 }
 
@@ -1735,9 +1838,13 @@ pub async fn moltorino_embed_stop() -> Result<(), String> {
 
 /// Synchronous teardown for the app-exit path (called from `RunEvent::Exit`,
 /// which is not an async context). Idempotent; a no-op if nothing was started.
+///
+/// Unlike the UI-driven `moltorino_embed_stop`, this *waits* for the message-loop
+/// thread to confirm it has killed and reaped Moltorino before returning, so
+/// StreamNook never exits out from under a not-yet-killed embedded process.
 #[cfg(windows)]
 pub fn moltorino_embed_stop_sync() {
-    let _ = imp::stop();
+    imp::stop_blocking();
 }
 
 /// Non-Windows: nothing to tear down.

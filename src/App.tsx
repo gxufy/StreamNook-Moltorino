@@ -783,8 +783,10 @@ function App() {
         const unlistenDeepLink = await onOpenUrl((urls: string[]) => {
           for (const url of urls) {
             Logger.debug('[App] Deep link received:', url);
-            // Parse streamnook://watch/{channel}
-            const match = url.match(/^streamnook:\/\/watch\/(.+)$/i);
+            // Parse streamnook://watch/{channel}. Accept the beta scheme too:
+            // the frontend bundle is shared between production and the beta
+            // build, which registers streamnook-beta:// instead.
+            const match = url.match(/^streamnook(?:-beta)?:\/\/watch\/(.+)$/i);
             if (match) {
               const channel = match[1].replace(/\/$/, ''); // strip trailing slash
               Logger.info(`[App] Deep link: opening stream for ${channel}`);

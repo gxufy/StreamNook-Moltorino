@@ -29,13 +29,13 @@ const TOKEN_FILE_NAME: &str = ".twitch_token";
 pub(crate) fn get_app_data_dir() -> Result<PathBuf> {
     // Try to use the standard config directory first
     if let Some(config_dir) = dirs::config_dir() {
-        let app_dir = config_dir.join("StreamNook");
+        let app_dir = config_dir.join(crate::build_identity::storage_dir());
         return Ok(app_dir);
     }
 
     // Fallback to data directory
     if let Some(data_dir) = dirs::data_dir() {
-        let app_dir = data_dir.join("StreamNook");
+        let app_dir = data_dir.join(crate::build_identity::storage_dir());
         return Ok(app_dir);
     }
 
@@ -263,7 +263,10 @@ impl TwitchService {
         }
 
         // Check keyring
-        if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+        if let Ok(entry) = Entry::new(
+            &crate::build_identity::keyring_service(KEYRING_SERVICE),
+            KEYRING_USERNAME,
+        ) {
             if entry.get_password().is_ok() {
                 debug!("[TWITCH_SERVICE] Found stored keyring token");
                 return true;
@@ -367,7 +370,10 @@ impl TwitchService {
     pub(crate) async fn persist_primary_token(token: &StorableToken) -> Result<()> {
         Self::store_token_to_file(token)?;
         let _ = Self::store_token_to_cookies(token).await;
-        if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+        if let Ok(entry) = Entry::new(
+            &crate::build_identity::keyring_service(KEYRING_SERVICE),
+            KEYRING_USERNAME,
+        ) {
             if let Ok(json) = serde_json::to_string(token) {
                 let _ = entry.set_password(&json);
             }
@@ -491,7 +497,10 @@ impl TwitchService {
                             debug!("[LOGIN] Token stored successfully to file and cookies!");
 
                             // Try to also store in keyring as backup (but don't fail if it doesn't work)
-                            if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+                            if let Ok(entry) = Entry::new(
+                                &crate::build_identity::keyring_service(KEYRING_SERVICE),
+                                KEYRING_USERNAME,
+                            ) {
                                 if let Ok(token_json) = serde_json::to_string(&storable_token) {
                                     let _ = entry.set_password(&token_json);
                                     debug!("[LOGIN] Also stored token in keyring as backup");
@@ -572,7 +581,10 @@ impl TwitchService {
         Self::store_token_to_file(&storable_token)?;
 
         // Also try to store in keyring as backup
-        if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+        if let Ok(entry) = Entry::new(
+            &crate::build_identity::keyring_service(KEYRING_SERVICE),
+            KEYRING_USERNAME,
+        ) {
             let token_json = serde_json::to_string(&storable_token)?;
             let _ = entry.set_password(&token_json);
         }
@@ -733,16 +745,21 @@ impl TwitchService {
         let _ = Self::delete_cookies().await;
 
         // Also try to delete from all known keyring locations
-        if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+        if let Ok(entry) = Entry::new(
+            &crate::build_identity::keyring_service(KEYRING_SERVICE),
+            KEYRING_USERNAME,
+        ) {
             let _ = entry.delete_credential();
         }
 
-        if let Ok(entry) = Entry::new("StreamNook", "twitch_token") {
-            let _ = entry.delete_credential();
-        }
+        if !crate::build_identity::is_beta_build() {
+            if let Ok(entry) = Entry::new("StreamNook", "twitch_token") {
+                let _ = entry.delete_credential();
+            }
 
-        if let Ok(entry) = Entry::new("streamnook", "twitch_token") {
-            let _ = entry.delete_credential();
+            if let Ok(entry) = Entry::new("streamnook", "twitch_token") {
+                let _ = entry.delete_credential();
+            }
         }
 
         debug!("[LOGOUT] Complete - all tokens cleared from all storage locations");
@@ -896,7 +913,10 @@ impl TwitchService {
                         // Fallback to keyring if cookies don't exist
                         debug!("[GET_TOKEN] Trying keyring as fallback...");
 
-                        if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+                        if let Ok(entry) = Entry::new(
+                            &crate::build_identity::keyring_service(KEYRING_SERVICE),
+                            KEYRING_USERNAME,
+                        ) {
                             if let Ok(pwd) = entry.get_password() {
                                 debug!("[GET_TOKEN] Token retrieved from keyring fallback");
 
@@ -1093,7 +1113,10 @@ impl TwitchService {
             })
             .or_else(|_| {
                 // Try keyring
-                if let Ok(entry) = Entry::new(KEYRING_SERVICE, KEYRING_USERNAME) {
+                if let Ok(entry) = Entry::new(
+                    &crate::build_identity::keyring_service(KEYRING_SERVICE),
+                    KEYRING_USERNAME,
+                ) {
                     if let Ok(pwd) = entry.get_password() {
                         return serde_json::from_str::<StorableToken>(&pwd).map_err(|e| {
                             anyhow::anyhow!("Failed to parse keyring token: {:?}", e)
@@ -3088,18 +3111,32 @@ impl TwitchService {
                     .map(|arr| {
                         arr.iter()
                             .filter_map(|t| {
-                                t.get("name").and_then(|n| n.as_str()).map(|s| s.to_string())
+                                t.get("name")
+                                    .and_then(|n| n.as_str())
+                                    .map(|s| s.to_string())
                             })
                             .collect()
                     })
                     .unwrap_or_default();
 
                 streams.push(TwitchStream {
-                    id: node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    user_id: broadcaster.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    id: node
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    user_id: broadcaster
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     user_name,
                     user_login,
-                    title: node.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    title: node
+                        .get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     viewer_count: node
                         .get("viewersCount")
                         .and_then(|v| v.as_u64())
@@ -3111,12 +3148,20 @@ impl TwitchService {
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string(),
-                    started_at: node.get("createdAt").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    started_at: node
+                        .get("createdAt")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     broadcaster_type,
                     has_shared_chat: None,
                     profile_image_url,
                     is_live: Some(true),
-                    tags: if stream_tags.is_empty() { None } else { Some(stream_tags) },
+                    tags: if stream_tags.is_empty() {
+                        None
+                    } else {
+                        Some(stream_tags)
+                    },
                 });
             }
         }

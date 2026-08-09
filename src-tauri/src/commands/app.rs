@@ -21,7 +21,7 @@ static EMOJI_CACHE: Lazy<Mutex<LruCache<String, String>>> = Lazy::new(|| {
 
 #[command]
 pub fn get_app_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
+    crate::build_identity::app_version().to_string()
 }
 
 #[command]

@@ -96,7 +96,7 @@ fn try_copy_components_from_exe() -> Option<ComponentManifest> {
 
 /// Get the current app version from Cargo.toml
 fn get_current_app_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
+    crate::build_identity::app_version().to_string()
 }
 
 /// Parse a dotted version ("8.0.1") into comparable numeric components, dropping
@@ -220,6 +220,22 @@ async fn check_for_bundle_update_streamnook() -> Result<BundleUpdateStatus, Stri
 /// outage never blocks updates.
 #[tauri::command]
 pub async fn check_for_bundle_update() -> Result<BundleUpdateStatus, String> {
+    // Beta builds never contact the production update endpoint: report the
+    // running version as up to date without touching the network.
+    if crate::build_identity::is_beta_build() {
+        let current_version = get_current_app_version();
+        return Ok(BundleUpdateStatus {
+            update_available: false,
+            current_version: current_version.clone(),
+            latest_version: current_version,
+            download_url: None,
+            bundle_name: None,
+            download_size: None,
+            component_changes: None,
+            release_notes: None,
+            sha256: None,
+        });
+    }
     match check_for_bundle_update_streamnook().await {
         Ok(status) => Ok(status),
         Err(e) => {
@@ -349,6 +365,9 @@ pub async fn extract_bundled_components() -> Result<(), String> {
 /// Download and install bundle update
 #[tauri::command]
 pub async fn download_and_install_bundle(app_handle: tauri::AppHandle) -> Result<(), String> {
+    if crate::build_identity::is_beta_build() {
+        return Err("Updates are disabled in beta builds.".to_string());
+    }
     let status = check_for_bundle_update().await?;
     if !status.update_available {
         return Err("No update available".to_string());
@@ -629,6 +648,10 @@ WshShell.Run """{batch}""", 0, False
 /// card, so the user controls when the swap happens instead of it firing mid-install.
 #[tauri::command]
 pub async fn restart_to_apply_update(app_handle: tauri::AppHandle) -> Result<(), String> {
+    if crate::build_identity::is_beta_build() {
+        return Err("Updates are disabled in beta builds.".to_string());
+    }
+
     let temp_dir = std::env::temp_dir().join("StreamNook-update");
 
     // In a `tauri dev` build, current_exe() is the dev binary under target/debug.
@@ -654,9 +677,8 @@ pub async fn restart_to_apply_update(app_handle: tauri::AppHandle) -> Result<(),
         // the window had. Flush geometry ourselves first, matching the flags the
         // plugin is built with (position/size/maximized only).
         use tauri_plugin_window_state::{AppHandleExt, StateFlags};
-        let _ = app_handle.save_window_state(
-            StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED,
-        );
+        let _ = app_handle
+            .save_window_state(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED);
         std::process::exit(0);
     }
 

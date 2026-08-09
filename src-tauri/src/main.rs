@@ -65,7 +65,7 @@ struct PendingWatchLink(Mutex<Option<String>>);
 /// `streamnook://<channel>` fallback. Returns a sanitized login (lowercase,
 /// `[a-z0-9_]`) or None when there's nothing watchable in the URL.
 fn parse_watch_link(url: &tauri::Url) -> Option<String> {
-    if url.scheme() != "streamnook" {
+    if url.scheme() != crate::build_identity::deep_link_scheme() {
         return None;
     }
     // The action ("watch"/"w") is the URL authority; the channel is the first
@@ -134,7 +134,7 @@ fn show_main_window(app: &tauri::AppHandle) {
         tauri::WebviewUrl::App("index.html".into())
     };
     match tauri::WebviewWindowBuilder::new(app, "main", app_url)
-        .title("StreamNook")
+        .title(crate::build_identity::display_name())
         .inner_size(1600.0, 1000.0)
         .min_inner_size(800.0, 600.0)
         .center()
@@ -176,6 +176,7 @@ fn close_main_window(app: tauri::AppHandle) {
     }
 }
 
+mod build_identity;
 mod commands;
 mod models;
 mod plugin_host;
@@ -657,7 +658,7 @@ fn main() {
             let _tray = TrayIconBuilder::new()
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
-                .tooltip("StreamNook")
+                .tooltip(crate::build_identity::display_name())
                 .icon(app.default_window_icon().unwrap().clone())
                 .on_menu_event(|app_handle, event| match event.id.as_ref() {
                     "show" => show_main_window(app_handle),
@@ -1254,8 +1255,13 @@ fn main() {
             if let tauri::RunEvent::Exit = event {
                 // Tear down the embedded Moltorino host (kills only the process
                 // and destroys only the window StreamNook created) so shutdown
-                // never leaves an orphaned Moltorino behind. No-op if never used.
-                let _ = commands::moltorino_embed::moltorino_embed_stop_sync();
+                // never leaves an orphaned Moltorino behind. Blocks until the
+                // owning thread confirms the kill. No-op if never used.
+                commands::moltorino_embed::moltorino_embed_stop_sync();
+                // Terminate every standalone Moltorino this instance launched, by
+                // its exact retained handle (never by PID or image name), so an
+                // "Open chat in Moltorino" launch can't outlive StreamNook.
+                commands::moltorino::shutdown_all_standalone();
                 // Ask running plugin processes to shut down before the app
                 // process dies, waiting briefly so well-behaved plugins exit
                 // gracefully (stragglers are killed with the supervisor).
@@ -1270,6 +1276,13 @@ fn main() {
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     }
                 });
+                // Close the shared Job Object last, after the explicit kill+wait
+                // paths above have already run. With KILL_ON_JOB_CLOSE this is a
+                // final safety net that can only ever terminate children we
+                // ourselves assigned to the job. No-op if the job was never
+                // created (no Moltorino was ever spawned).
+                #[cfg(windows)]
+                commands::moltorino::jobobject::close();
             }
         });
 }

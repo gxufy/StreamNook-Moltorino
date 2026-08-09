@@ -1,0 +1,25 @@
+{
+  "$schema": "gen/schemas/desktop-schema.json",
+  "productName": "StreamNook Moltorino Beta",
+  "version": "8.4.0-beta.1",
+  "identifier": "com.gxufy.streamnook-moltorino.beta",
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": {
+      "target/beta-package-resources/": ""
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["streamnook-beta"]
+      }
+    }
+  }
+}

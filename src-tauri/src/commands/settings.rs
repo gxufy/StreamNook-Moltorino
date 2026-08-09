@@ -283,6 +283,12 @@ pub async fn send_test_notification(
 
 #[tauri::command]
 pub async fn get_latest_app_version() -> Result<String, String> {
+    // Beta builds never contact the production release endpoint: report the
+    // running version so the UI shows "up to date" without touching the network.
+    if crate::build_identity::is_beta_build() {
+        return Ok(crate::build_identity::app_version().to_string());
+    }
+
     // Follow the full redirect chain so the version survives a repo
     // rename/transfer (old URLs 301 to the new home before the tag hop)
     let client = crate::services::http::client().clone();
@@ -312,7 +318,7 @@ pub async fn get_latest_app_version() -> Result<String, String> {
 #[tauri::command]
 pub fn get_current_app_version() -> Result<String, String> {
     // Get the version from Cargo.toml at compile time
-    Ok(env!("CARGO_PKG_VERSION").to_string())
+    Ok(crate::build_identity::app_version().to_string())
 }
 
 #[derive(serde::Serialize)]
@@ -354,7 +360,7 @@ pub async fn get_release_notes(version: Option<String>) -> Result<ReleaseNotes, 
         Some(v) => v,
         None => {
             // If no version specified, use the current app version
-            env!("CARGO_PKG_VERSION").to_string()
+            crate::build_identity::app_version().to_string()
         }
     };
 
@@ -417,6 +423,10 @@ pub async fn get_release_notes(version: Option<String>) -> Result<ReleaseNotes, 
 pub async fn download_and_install_app_update(
     app_handle: tauri::AppHandle,
 ) -> Result<String, String> {
+    if crate::build_identity::is_beta_build() {
+        return Err("Updates are disabled in beta builds.".to_string());
+    }
+
     // First, get the latest version. Follow the full redirect chain so this
     // survives a repo rename/transfer (old URLs 301 to the new home first)
     let client = crate::services::http::client().clone();

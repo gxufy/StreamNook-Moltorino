@@ -63,7 +63,10 @@ fn persist(sess: &YouTubeSession) {
     let Ok(json) = serde_json::to_string(sess) else {
         return;
     };
-    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+    if let Ok(entry) = keyring::Entry::new(
+        &crate::build_identity::keyring_service(KEYRING_SERVICE),
+        KEYRING_USER,
+    ) {
         let _ = entry.set_password(&json);
     }
     if let Some(p) = session_path() {
@@ -72,7 +75,10 @@ fn persist(sess: &YouTubeSession) {
 }
 
 fn load_persisted() -> Option<YouTubeSession> {
-    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+    if let Ok(entry) = keyring::Entry::new(
+        &crate::build_identity::keyring_service(KEYRING_SERVICE),
+        KEYRING_USER,
+    ) {
         if let Ok(json) = entry.get_password() {
             if let Ok(s) = serde_json::from_str::<YouTubeSession>(&json) {
                 return Some(s);
@@ -86,7 +92,10 @@ fn load_persisted() -> Option<YouTubeSession> {
 }
 
 fn clear_persisted() {
-    if let Ok(entry) = keyring::Entry::new(KEYRING_SERVICE, KEYRING_USER) {
+    if let Ok(entry) = keyring::Entry::new(
+        &crate::build_identity::keyring_service(KEYRING_SERVICE),
+        KEYRING_USER,
+    ) {
         let _ = entry.delete_credential();
     }
     if let Some(p) = session_path() {
@@ -134,7 +143,11 @@ pub fn is_connected() -> bool {
 
 /// The cached connected-account name (None if not yet fetched).
 pub fn account_name() -> Option<String> {
-    session_cell().lock().ok().and_then(|s| s.clone()).and_then(|s| s.account_name)
+    session_cell()
+        .lock()
+        .ok()
+        .and_then(|s| s.clone())
+        .and_then(|s| s.account_name)
 }
 
 /// The connected account's name for the Connections UI: cached, else fetched once
@@ -175,7 +188,10 @@ pub fn auth_headers() -> Option<Vec<(String, String)>> {
         .join(" ");
     Some(vec![
         ("Cookie".to_string(), cookie),
-        ("Authorization".to_string(), format!("SAPISIDHASH {}_{}", ts, digest)),
+        (
+            "Authorization".to_string(),
+            format!("SAPISIDHASH {}_{}", ts, digest),
+        ),
         ("Origin".to_string(), ORIGIN.to_string()),
         ("X-Origin".to_string(), ORIGIN.to_string()),
         ("X-Goog-AuthUser".to_string(), "0".to_string()),
@@ -213,9 +229,8 @@ pub async fn connect() -> Result<()> {
         let _ = existing.destroy();
     }
 
-    let url = WebviewUrl::External(
-        tauri::Url::parse(ORIGIN).map_err(|e| anyhow!("bad url: {}", e))?,
-    );
+    let url =
+        WebviewUrl::External(tauri::Url::parse(ORIGIN).map_err(|e| anyhow!("bad url: {}", e))?);
     WebviewWindowBuilder::new(&app, LOGIN_WINDOW_LABEL, url)
         .title("Sign in to YouTube")
         .inner_size(480.0, 680.0)
@@ -289,7 +304,10 @@ fn find_account_name(v: &serde_json::Value) -> Option<String> {
     match v {
         serde_json::Value::Object(map) => {
             if let Some(h) = map.get("activeAccountHeaderRenderer") {
-                if let Some(name) = h.pointer("/accountName/simpleText").and_then(|x| x.as_str()) {
+                if let Some(name) = h
+                    .pointer("/accountName/simpleText")
+                    .and_then(|x| x.as_str())
+                {
                     return Some(name.to_string());
                 }
                 if let Some(runs) = h.pointer("/accountName/runs").and_then(|r| r.as_array()) {
@@ -400,7 +418,8 @@ async fn fetch_cookies_from_window(
     let targets: Vec<String> = names.iter().map(|s| s.to_string()).collect();
 
     let dispatched = webview.with_webview(move |platform_webview| {
-        let setup = unsafe { request_cookies(platform_webview, tx_for_closure.clone(), targets.clone()) };
+        let setup =
+            unsafe { request_cookies(platform_webview, tx_for_closure.clone(), targets.clone()) };
         if let Err(e) = setup {
             if let Some(sender) = tx_for_closure.lock().unwrap().take() {
                 let _ = sender.send(Err(anyhow!("WebView2 GetCookies setup failed: {}", e)));
@@ -417,7 +436,9 @@ async fn fetch_cookies_from_window(
 #[cfg(windows)]
 unsafe fn request_cookies(
     platform_webview: tauri::webview::PlatformWebview,
-    tx_slot: std::sync::Arc<std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Result<HashMap<String, String>>>>>>,
+    tx_slot: std::sync::Arc<
+        std::sync::Mutex<Option<tokio::sync::oneshot::Sender<Result<HashMap<String, String>>>>>,
+    >,
     targets: Vec<String>,
 ) -> windows::core::Result<()> {
     use webview2_com::GetCookiesCompletedHandler;
@@ -454,18 +475,22 @@ fn extract_cookies(
     let list = cookie_list.ok_or_else(|| anyhow!("WebView2 returned null cookie list"))?;
 
     let mut count: u32 = 0;
-    unsafe { list.Count(&mut count as *mut u32) }.map_err(|e| anyhow!("CookieList::Count: {}", e))?;
+    unsafe { list.Count(&mut count as *mut u32) }
+        .map_err(|e| anyhow!("CookieList::Count: {}", e))?;
 
     let mut found: HashMap<String, String> = HashMap::new();
     for i in 0..count {
-        let cookie = unsafe { list.GetValueAtIndex(i) }.map_err(|e| anyhow!("CookieList[{}]: {}", i, e))?;
+        let cookie =
+            unsafe { list.GetValueAtIndex(i) }.map_err(|e| anyhow!("CookieList[{}]: {}", i, e))?;
         let mut name_ptr = PWSTR::null();
-        unsafe { cookie.Name(&mut name_ptr as *mut PWSTR) }.map_err(|e| anyhow!("cookie.Name: {}", e))?;
+        unsafe { cookie.Name(&mut name_ptr as *mut PWSTR) }
+            .map_err(|e| anyhow!("cookie.Name: {}", e))?;
         let name = take_pwstr(name_ptr);
         // Empty targets = capture every cookie (the whole browser Cookie set).
         if targets.is_empty() || targets.iter().any(|t| t == &name) {
             let mut value_ptr = PWSTR::null();
-            unsafe { cookie.Value(&mut value_ptr as *mut PWSTR) }.map_err(|e| anyhow!("cookie.Value: {}", e))?;
+            unsafe { cookie.Value(&mut value_ptr as *mut PWSTR) }
+                .map_err(|e| anyhow!("cookie.Value: {}", e))?;
             let value = take_pwstr(value_ptr);
             if !value.is_empty() {
                 found.insert(name, value);
