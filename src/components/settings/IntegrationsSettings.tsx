@@ -7,20 +7,27 @@ import { DiscordGlyph } from '../ui/DiscordGlyph';
 import streamnookLogo from '../../assets/streamnook-logo.png';
 import { Logger } from '../../utils/logger';
 
-/** What `validate_moltorino_path` hands back on success (mirrors MoltorinoPathInfo). */
-interface MoltorinoPathInfo {
+/** Generic path validation response. */
+interface ChatRuntimePathInfo {
   resolved_path: string;
   file_name: string;
 }
 
-/** What `moltorino_runtime_status` reports (mirrors MoltorinoRuntimeStatus). This
- *  is the source of truth for which executable will actually run: an empty custom
- *  path does NOT imply the bundle is present — only the backend resolver knows. */
-interface MoltorinoRuntimeStatus {
+type ChatRuntimeKind =
+  | 'bundled_bluzyrino'
+  | 'custom_bluzyrino'
+  | 'custom_moltorino'
+  | 'custom'
+  | 'legacy_bundled_moltorino';
+
+/** The first four fields retain the legacy runtime-status contract. */
+interface ChatRuntimeStatus {
   available: boolean;
   source: 'custom' | 'bundled' | null;
   executable_path: string | null;
   error: string | null;
+  runtime_kind: ChatRuntimeKind | null;
+  display_name: string | null;
 }
 
 // Module scope, not inside the render body: a nested component definition gets a
@@ -57,7 +64,7 @@ const IntegrationsSettings = () => {
   // Which runtime the backend would actually use (bundled vs custom), or the
   // not-found reason. This is the source of truth for the status line — the empty
   // path field no longer implies "unavailable", because a bundled copy may exist.
-  const [runtime, setRuntime] = useState<MoltorinoRuntimeStatus | null>(null);
+  const [runtime, setRuntime] = useState<ChatRuntimeStatus | null>(null);
 
   const setMoltorino = (patch: Partial<typeof moltorino>) =>
     updateSettings({ ...settings, moltorino: { ...moltorino, ...patch } });
@@ -66,13 +73,20 @@ const IntegrationsSettings = () => {
   // Moltorino); safe to call on mount and after the saved path changes.
   const refreshRuntime = useCallback(() => {
     let alive = true;
-    invoke<MoltorinoRuntimeStatus>('moltorino_runtime_status')
+    invoke<ChatRuntimeStatus>('chat_runtime_status')
       .then((status) => {
         if (alive) setRuntime(status);
       })
       .catch((e) => {
         if (alive)
-          setRuntime({ available: false, source: null, executable_path: null, error: String(e) });
+          setRuntime({
+            available: false,
+            source: null,
+            executable_path: null,
+            error: String(e),
+            runtime_kind: null,
+            display_name: null,
+          });
       });
     return () => {
       alive = false;
@@ -89,7 +103,7 @@ const IntegrationsSettings = () => {
       return;
     }
     let alive = true;
-    invoke<MoltorinoPathInfo>('validate_moltorino_path', { path: storedPath })
+    invoke<ChatRuntimePathInfo>('validate_chat_runtime_path', { path: storedPath })
       .then((info) => {
         if (alive) setCheck({ ok: true, message: `Found ${info.file_name}` });
       })
@@ -119,7 +133,7 @@ const IntegrationsSettings = () => {
     }
     setChecking(true);
     try {
-      const info = await invoke<MoltorinoPathInfo>('validate_moltorino_path', { path: next });
+      const info = await invoke<ChatRuntimePathInfo>('validate_chat_runtime_path', { path: next });
       setCheck({ ok: true, message: `Found ${info.file_name}` });
     } catch (e) {
       setCheck({ ok: false, message: String(e) });
@@ -128,11 +142,11 @@ const IntegrationsSettings = () => {
     }
   };
 
-  const browseForMoltorino = async () => {
+  const browseForChatRuntime = async () => {
     try {
       const { open } = await import('@tauri-apps/plugin-dialog');
       const picked = await open({
-        title: 'Select the Moltorino application',
+        title: 'Select a compatible chat application',
         multiple: false,
         directory: false,
         filters: [{ name: 'Application', extensions: ['exe'] }],
@@ -141,7 +155,7 @@ const IntegrationsSettings = () => {
       setPathInput(picked);
       await commitPath(picked);
     } catch (e) {
-      Logger.error('[Integrations] Moltorino browse failed:', e);
+      Logger.error('[Integrations] Chat runtime browse failed:', e);
     }
   };
   // Plugins contribute their own integration panels here, the same way a drops
@@ -210,10 +224,10 @@ const IntegrationsSettings = () => {
               <MessagesSquare className="h-[26px] w-[26px] text-accent" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[14px] font-semibold text-textPrimary">Moltorino</div>
+              <div className="text-[14px] font-semibold text-textPrimary">Chat Runtime</div>
               <p className="mt-0.5 text-[12px] leading-relaxed text-textSecondary">
-                Open a Twitch channel's chat in Moltorino, a Chatterino-style chat client that ships
-                with StreamNook. Native chat keeps running as normal.
+                Bundled runtime: Bluzyrino. You can instead choose another compatible chat executable.
+                Native chat keeps running as normal.
               </p>
             </div>
           </div>
@@ -235,10 +249,16 @@ const IntegrationsSettings = () => {
                 )}
                 <span className="min-w-0 break-words">
                   {runtime.available
-                    ? runtime.source === 'custom'
-                      ? 'Using custom Moltorino'
-                      : 'Using bundled Moltorino'
-                    : 'Moltorino runtime not found'}
+                    ? runtime.runtime_kind === 'bundled_bluzyrino'
+                      ? 'Using bundled Bluzyrino'
+                      : runtime.runtime_kind === 'custom_bluzyrino'
+                        ? 'Using custom Bluzyrino'
+                        : runtime.runtime_kind === 'custom_moltorino'
+                          ? 'Using custom Moltorino'
+                          : runtime.runtime_kind === 'legacy_bundled_moltorino'
+                            ? 'Using legacy bundled Moltorino'
+                            : 'Using custom chat runtime'
+                    : 'Chat runtime not found'}
                   {runtime.executable_path && (
                     <span className="text-textMuted"> — {runtime.executable_path}</span>
                   )}
@@ -248,7 +268,7 @@ const IntegrationsSettings = () => {
 
             <div>
               <div className="mb-1.5 text-[12px] font-medium text-textPrimary">
-                Custom Moltorino path (advanced)
+                Custom chat executable
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -260,13 +280,13 @@ const IntegrationsSettings = () => {
                     if (e.key === 'Enter') commitPath(pathInput);
                   }}
                   spellCheck={false}
-                  placeholder="Leave empty to use the bundled Moltorino"
-                  aria-label="Custom Moltorino executable path (advanced)"
+                  placeholder="Leave empty to use bundled Bluzyrino"
+                  aria-label="Custom chat executable path"
                   className="glass-input min-w-0 flex-1 rounded-md px-3 py-1.5 text-[13px] text-textPrimary"
                 />
                 <button
                   type="button"
-                  onClick={browseForMoltorino}
+                  onClick={browseForChatRuntime}
                   className="glass-button-secondary flex-shrink-0 px-3 py-1.5 text-[13px] text-textSecondary hover:text-textPrimary"
                 >
                   Browse
@@ -296,20 +316,19 @@ const IntegrationsSettings = () => {
               )}
               {!checking && !check && (
                 <p className="mt-1.5 text-[12px] leading-relaxed text-textMuted">
-                  Leave this empty to use the Moltorino that ships with StreamNook. Set a path only
-                  to override it with your own install &mdash; it wins over the bundled copy. This
-                  setting stays out of portable settings backups because the path is specific to this
-                  machine.
+                  Leave this empty to use the bundled Bluzyrino runtime. A compatible custom
+                  executable overrides the bundled runtime. This setting stays out of portable
+                  settings backups because the path is specific to this machine.
                 </p>
               )}
             </div>
 
             <div className="flex items-start justify-between gap-4 pt-0.5">
               <div className="min-w-0 flex-1">
-                <div className="text-[12px] font-medium text-textPrimary">Show chat button</div>
+                <div className="text-[12px] font-medium text-textPrimary">Open chat externally</div>
                 <p className="mt-0.5 text-[12px] leading-relaxed text-textSecondary">
-                  Add an "Open chat in Moltorino" button next to Pop out chat in the Twitch chat
-                  header. Needs a working Moltorino runtime (bundled or custom).
+                  Add an external chat-runtime button next to Pop out chat in the Twitch chat header.
+                  Needs a working bundled or custom runtime.
                 </p>
               </div>
               <Toggle
@@ -324,11 +343,10 @@ const IntegrationsSettings = () => {
                 and any embedding failure). Windows-only; needs a working runtime. */}
             <div className="flex items-start justify-between gap-4 pt-0.5">
               <div className="min-w-0 flex-1">
-                <div className="text-[12px] font-medium text-textPrimary">Embed chat in StreamNook</div>
+                <div className="text-[12px] font-medium text-textPrimary">Embedded chat</div>
                 <p className="mt-0.5 text-[12px] leading-relaxed text-textSecondary">
-                  Show Moltorino inside the main chat panel instead of a separate window, following
-                  the channel you're watching. Windows only. Native chat takes over automatically for
-                  VODs, non-Twitch channels, and anything Moltorino can't show.
+                  Show the compatible runtime inside the main chat panel, following the channel you're
+                  watching. Windows only. Native chat takes over for unsupported contexts or failures.
                 </p>
               </div>
               <Toggle

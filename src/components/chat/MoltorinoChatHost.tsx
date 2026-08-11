@@ -24,7 +24,7 @@ import { Logger } from '../../utils/logger';
 
 /// Event Rust emits when the embedded surface can't continue (Moltorino exited,
 /// or a create/attach failure) and the UI must fall back to native chat.
-const FALLBACK_EVENT = 'moltorino-embed-fallback';
+const FALLBACK_EVENT = 'chat-runtime-embed-fallback';
 
 export interface MoltorinoChatHostProps {
   /// The normalized (lowercased, validated) Twitch login to follow.
@@ -101,7 +101,7 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
 
     const pushBounds = (b: Bounds) => {
       lastBounds.current = b;
-      invoke('moltorino_embed_set_bounds', {
+      invoke('chat_runtime_embed_set_bounds', {
         x: b.x,
         y: b.y,
         width: b.w,
@@ -126,7 +126,7 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
     lastBounds.current = initial;
     if (!started.current) {
       started.current = true;
-      invoke('moltorino_embed_start', {
+      invoke('chat_runtime_embed_start', {
         channel: channelRef.current,
         x: initial.x,
         y: initial.y,
@@ -159,7 +159,7 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
       // Hide (don't kill) the shared host so a later embeddable channel reuses it
       // instantly, and so an unsupported context never leaves the old channel on
       // screen.
-      invoke('moltorino_embed_set_bounds', {
+      invoke('chat_runtime_embed_set_bounds', {
         x: lastBounds.current?.x ?? 0,
         y: lastBounds.current?.y ?? 0,
         width: lastBounds.current?.w ?? 0,
@@ -179,7 +179,7 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
       firstChannelRun.current = false;
       return;
     }
-    invoke('moltorino_embed_set_channel', { channel }).catch((e) =>
+    invoke('chat_runtime_embed_set_channel', { channel }).catch((e) =>
       Logger.error('[Moltorino] set_channel failed:', e)
     );
   }, [channel]);

@@ -433,10 +433,10 @@ pub fn shutdown_all_standalone() {
 #[cfg(not(windows))]
 pub fn shutdown_all_standalone() {}
 
-/// Result of checking a user-supplied Moltorino executable path, surfaced in the
-/// Integrations settings card.
+/// Result of checking a user-supplied chat-runtime executable path, surfaced in
+/// the Integrations settings card.
 #[derive(Serialize, Clone)]
-pub struct MoltorinoPathInfo {
+pub struct ChatRuntimePathInfo {
     /// Absolute, symlink-resolved path we would actually spawn.
     pub resolved_path: String,
     /// Trailing file name, for a compact confirmation line in the UI.
@@ -477,7 +477,7 @@ pub(crate) fn resolve_executable(raw: &str) -> Result<PathBuf, String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return Err(
-            "No Moltorino executable is set. Choose Moltorino.exe in Settings → Integrations."
+            "No custom chat executable is set. Choose one in Settings → Integrations."
                 .to_string(),
         );
     }
@@ -521,113 +521,168 @@ pub(crate) fn resolve_executable(raw: &str) -> Result<PathBuf, String> {
     Ok(canonical)
 }
 
-/// Where a resolved Moltorino runtime came from, so callers (and the settings
-/// card) can explain which executable is actually in use.
+/// Which compatible chat runtime was resolved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MoltorinoSource {
-    /// The user's explicitly-configured path (the advanced override).
-    CustomOverride,
-    /// The copy StreamNook ships next to its own executable.
-    BundledRuntime,
+pub(crate) enum ChatRuntimeKind {
+    BundledBluzyrino,
+    Custom,
+    LegacyBundledMoltorino,
 }
 
-impl MoltorinoSource {
-    /// Stable lowercase tag for the settings-card status payload and debug logs.
-    pub(crate) fn as_status(self) -> &'static str {
+/// Presentation identity for a resolved runtime. This never affects launch
+/// arguments or process handling.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChatRuntimeIdentity {
+    Bluzyrino,
+    Moltorino,
+    Generic,
+}
+
+impl ChatRuntimeIdentity {
+    pub(crate) fn display_name(self) -> &'static str {
         match self {
-            MoltorinoSource::CustomOverride => "custom",
-            MoltorinoSource::BundledRuntime => "bundled",
+            Self::Bluzyrino => "Bluzyrino",
+            Self::Moltorino => "Moltorino",
+            Self::Generic => "Chat runtime",
         }
     }
 }
 
-/// A resolved, on-disk Moltorino executable plus where it came from.
+/// A resolved compatible executable and its source.
 #[derive(Debug)]
-pub(crate) struct MoltorinoRuntime {
-    pub(crate) path: PathBuf,
-    pub(crate) source: MoltorinoSource,
+pub(crate) struct ResolvedChatRuntime {
+    pub(crate) kind: ChatRuntimeKind,
+    pub(crate) executable_path: PathBuf,
 }
 
-/// The bundled runtime's expected location: `moltorino\Moltorino7.exe` beside the
-/// StreamNook executable. Split out (and taking `exe_dir` explicitly) so it is
-/// pure and unit-testable without depending on the real install location.
-pub(crate) fn bundled_runtime_path(exe_dir: &Path) -> PathBuf {
+impl ResolvedChatRuntime {
+    /// Backward-compatible status value. Do not enrich this field: old callers
+    /// understand only `custom` and `bundled`.
+    pub(crate) fn source_status(&self) -> &'static str {
+        match self.kind {
+            ChatRuntimeKind::Custom => "custom",
+            ChatRuntimeKind::BundledBluzyrino | ChatRuntimeKind::LegacyBundledMoltorino => {
+                "bundled"
+            }
+        }
+    }
+
+    pub(crate) fn identity(&self) -> ChatRuntimeIdentity {
+        match self.kind {
+            ChatRuntimeKind::BundledBluzyrino => ChatRuntimeIdentity::Bluzyrino,
+            ChatRuntimeKind::LegacyBundledMoltorino => ChatRuntimeIdentity::Moltorino,
+            ChatRuntimeKind::Custom => identity_from_path(&self.executable_path),
+        }
+    }
+
+    pub(crate) fn runtime_kind_status(&self) -> &'static str {
+        match (self.kind, self.identity()) {
+            (ChatRuntimeKind::BundledBluzyrino, _) => "bundled_bluzyrino",
+            (ChatRuntimeKind::LegacyBundledMoltorino, _) => "legacy_bundled_moltorino",
+            (ChatRuntimeKind::Custom, ChatRuntimeIdentity::Bluzyrino) => "custom_bluzyrino",
+            (ChatRuntimeKind::Custom, ChatRuntimeIdentity::Moltorino) => "custom_moltorino",
+            (ChatRuntimeKind::Custom, ChatRuntimeIdentity::Generic) => "custom",
+        }
+    }
+}
+
+fn identity_from_path(path: &Path) -> ChatRuntimeIdentity {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    if name.eq_ignore_ascii_case("Bluzyrino.exe") {
+        ChatRuntimeIdentity::Bluzyrino
+    } else if name.eq_ignore_ascii_case("Moltorino7.exe")
+        || name.eq_ignore_ascii_case("Moltorino.exe")
+    {
+        ChatRuntimeIdentity::Moltorino
+    } else {
+        ChatRuntimeIdentity::Generic
+    }
+}
+
+pub(crate) fn bundled_bluzyrino_path(exe_dir: &Path) -> PathBuf {
+    exe_dir.join("chat-runtime").join("Bluzyrino.exe")
+}
+
+pub(crate) fn legacy_bundled_moltorino_path(exe_dir: &Path) -> PathBuf {
     exe_dir.join("moltorino").join("Moltorino7.exe")
 }
 
-/// Validate a user-configured override, which may point either directly at an
-/// executable OR at the folder that contains `Moltorino7.exe`. A folder resolves
-/// to that file; anything else falls through to the shared [`resolve_executable`]
-/// file checks, so the error text stays identical to the standalone path field.
+/// Validate a user-configured override. A direct path may name any `.exe`; a
+/// directory is probed for the two known compatible executable names.
 fn resolve_custom_override(raw: &str) -> Result<PathBuf, String> {
     let trimmed = raw.trim();
-    // Empty is not an override — the caller decides what to do with that.
     if trimmed.is_empty() {
         return Err(
-            "No Moltorino executable is set. Choose Moltorino.exe in Settings → Integrations."
+            "No custom chat executable is set. Choose one in Settings → Integrations."
                 .to_string(),
         );
     }
-    // A configured folder is allowed: look for Moltorino7.exe inside it. Check the
-    // raw path first so the folder branch wins before the file-only checks below.
     let path = Path::new(trimmed);
     if path.is_dir() {
-        let candidate = path.join("Moltorino7.exe");
-        return resolve_executable(&candidate.to_string_lossy());
+        for file_name in ["Bluzyrino.exe", "Moltorino7.exe"] {
+            let candidate = path.join(file_name);
+            if candidate.is_file() {
+                return resolve_executable(&candidate.to_string_lossy());
+            }
+        }
+        return Err(format!(
+            "That folder doesn't contain Bluzyrino.exe or Moltorino7.exe: {}",
+            display_path(path)
+        ));
     }
     resolve_executable(trimmed)
 }
 
-/// Resolve which Moltorino executable to run, given the user's configured path
-/// and the directory StreamNook's own executable lives in. Pure (takes `exe_dir`)
-/// so the whole precedence can be unit-tested against temporary directories.
-///
-/// Order:
-///   1. A non-empty configured override that resolves to a valid executable.
-///   2. The bundled `moltorino\Moltorino7.exe` beside StreamNook.
-///   3. Otherwise a clear "not found" error.
-///
-/// A configured-but-invalid override never hard-fails resolution: it is logged
-/// and we fall through to the bundled copy, so a stale path can't strand a user
-/// who has the bundle available.
+/// Resolve the configured custom executable, then the new bundled Bluzyrino
+/// layout, then the legacy bundled Moltorino layout.
 pub(crate) fn resolve_runtime_in(
     configured: &str,
     exe_dir: &Path,
-) -> Result<MoltorinoRuntime, String> {
+) -> Result<ResolvedChatRuntime, String> {
     if !configured.trim().is_empty() {
         match resolve_custom_override(configured) {
-            Ok(path) => {
-                return Ok(MoltorinoRuntime {
-                    path,
-                    source: MoltorinoSource::CustomOverride,
+            Ok(executable_path) => {
+                return Ok(ResolvedChatRuntime {
+                    kind: ChatRuntimeKind::Custom,
+                    executable_path,
                 });
             }
             Err(e) => {
                 log::warn!(
-                    "[Moltorino] configured path is unusable, trying the bundled runtime: {e}"
+                    "[ChatRuntime] configured path is unusable, trying bundled runtimes: {e}"
                 );
             }
         }
     }
 
-    let bundled = bundled_runtime_path(exe_dir);
-    if bundled.is_file() {
-        return Ok(MoltorinoRuntime {
-            path: bundled,
-            source: MoltorinoSource::BundledRuntime,
+    let bluzyrino = bundled_bluzyrino_path(exe_dir);
+    if bluzyrino.is_file() {
+        return Ok(ResolvedChatRuntime {
+            kind: ChatRuntimeKind::BundledBluzyrino,
+            executable_path: bluzyrino,
+        });
+    }
+
+    let moltorino = legacy_bundled_moltorino_path(exe_dir);
+    if moltorino.is_file() {
+        return Ok(ResolvedChatRuntime {
+            kind: ChatRuntimeKind::LegacyBundledMoltorino,
+            executable_path: moltorino,
         });
     }
 
     Err(format!(
-        "Moltorino isn't installed. StreamNook looked for a bundled copy at {} and no custom \
-         path is set in Settings → Integrations.",
-        display_path(&bundled)
+        "Chat runtime not found. StreamNook looked for bundled copies at {} and {} and no usable \
+         custom path is set in Settings → Integrations.",
+        display_path(&bluzyrino),
+        display_path(&moltorino)
     ))
 }
 
-/// Convenience wrapper that discovers StreamNook's executable directory via
-/// [`std::env::current_exe`] and delegates to [`resolve_runtime_in`].
-pub(crate) fn resolve_moltorino_runtime(configured: &str) -> Result<MoltorinoRuntime, String> {
+pub(crate) fn resolve_chat_runtime(configured: &str) -> Result<ResolvedChatRuntime, String> {
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(Path::to_path_buf))
@@ -635,59 +690,89 @@ pub(crate) fn resolve_moltorino_runtime(configured: &str) -> Result<MoltorinoRun
     resolve_runtime_in(configured, &exe_dir)
 }
 
-/// Read-only view of what runtime resolution would pick right now, surfaced in
-/// the Integrations settings card. Never launches anything.
-#[derive(Serialize, Clone)]
-pub struct MoltorinoRuntimeStatus {
-    /// Whether a runnable Moltorino executable was found.
-    pub available: bool,
-    /// `"custom"` or `"bundled"` when available; `null` otherwise.
-    pub source: Option<String>,
-    /// Display path of the resolved executable when available; `null` otherwise.
-    pub executable_path: Option<String>,
-    /// User-facing explanation when nothing was found; `null` when available.
-    pub error: Option<String>,
+/// Internal compatibility alias used by the unchanged embed implementation.
+pub(crate) fn resolve_moltorino_runtime(
+    configured: &str,
+) -> Result<ResolvedChatRuntime, String> {
+    resolve_chat_runtime(configured)
 }
 
-/// Report which Moltorino runtime resolution picks, using the persisted custom
-/// path. Read-only: it resolves and validates but never spawns Moltorino.
-#[tauri::command]
-pub async fn moltorino_runtime_status(
-    state: tauri::State<'_, crate::models::settings::AppState>,
-) -> Result<MoltorinoRuntimeStatus, String> {
-    let configured = {
-        let settings = state
-            .settings
-            .lock()
-            .map_err(|_| "Couldn't read settings.".to_string())?;
-        settings
-            .moltorino
-            .executable_path
-            .clone()
-            .unwrap_or_default()
-    };
-    Ok(match resolve_moltorino_runtime(&configured) {
-        Ok(runtime) => MoltorinoRuntimeStatus {
+/// Read-only view of runtime resolution. The first four fields are the legacy
+/// contract; `runtime_kind` and `display_name` add presentation metadata.
+#[derive(Serialize, Clone)]
+pub struct ChatRuntimeStatus {
+    pub available: bool,
+    /// Exactly `custom`, `bundled`, or null for backward compatibility.
+    pub source: Option<String>,
+    pub executable_path: Option<String>,
+    pub error: Option<String>,
+    pub runtime_kind: Option<String>,
+    pub display_name: Option<String>,
+}
+
+/// Compatibility type name for Rust callers; serialization is unchanged.
+pub type MoltorinoRuntimeStatus = ChatRuntimeStatus;
+
+fn runtime_status_for(configured: &str, exe_dir: &Path) -> ChatRuntimeStatus {
+    match resolve_runtime_in(configured, exe_dir) {
+        Ok(runtime) => ChatRuntimeStatus {
             available: true,
-            source: Some(runtime.source.as_status().to_string()),
-            executable_path: Some(display_path(&runtime.path)),
+            source: Some(runtime.source_status().to_string()),
+            executable_path: Some(display_path(&runtime.executable_path)),
             error: None,
+            runtime_kind: Some(runtime.runtime_kind_status().to_string()),
+            display_name: Some(runtime.identity().display_name().to_string()),
         },
-        Err(e) => MoltorinoRuntimeStatus {
+        Err(e) => ChatRuntimeStatus {
             available: false,
             source: None,
             executable_path: None,
             error: Some(e),
+            runtime_kind: None,
+            display_name: None,
         },
-    })
+    }
 }
 
-/// Check a candidate Moltorino executable path without launching anything.
-/// Called by the settings card's Verify button and on blur.
+fn configured_runtime_path(
+    state: &tauri::State<'_, crate::models::settings::AppState>,
+) -> Result<String, String> {
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|_| "Couldn't read settings.".to_string())?;
+    Ok(settings
+        .moltorino
+        .executable_path
+        .clone()
+        .unwrap_or_default())
+}
+
+fn current_exe_dir() -> Result<PathBuf, String> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+        .ok_or_else(|| "Couldn't locate the StreamNook program folder.".to_string())
+}
+
 #[tauri::command]
-pub async fn validate_moltorino_path(path: String) -> Result<MoltorinoPathInfo, String> {
-    let resolved = resolve_executable(&path)?;
-    Ok(MoltorinoPathInfo {
+pub async fn chat_runtime_status(
+    state: tauri::State<'_, crate::models::settings::AppState>,
+) -> Result<ChatRuntimeStatus, String> {
+    let configured = configured_runtime_path(&state)?;
+    Ok(runtime_status_for(&configured, &current_exe_dir()?))
+}
+
+#[tauri::command]
+pub async fn moltorino_runtime_status(
+    state: tauri::State<'_, crate::models::settings::AppState>,
+) -> Result<MoltorinoRuntimeStatus, String> {
+    chat_runtime_status(state).await
+}
+
+fn validate_runtime_path(path: &str) -> Result<ChatRuntimePathInfo, String> {
+    let resolved = resolve_custom_override(path)?;
+    Ok(ChatRuntimePathInfo {
         file_name: resolved
             .file_name()
             .map(|f| f.to_string_lossy().to_string())
@@ -696,47 +781,49 @@ pub async fn validate_moltorino_path(path: String) -> Result<MoltorinoPathInfo, 
     })
 }
 
-/// Launch the user's Moltorino with a single Twitch channel.
-///
-/// `-c t:<channel>` (rather than `-a`) is deliberate: `-c` builds a clean
-/// single-channel layout and sets Moltorino's own `dontSaveSettings` flag, so an
-/// on-demand launch from StreamNook never rewrites the user's saved Moltorino tab
-/// layout.
+#[tauri::command]
+pub async fn validate_chat_runtime_path(path: String) -> Result<ChatRuntimePathInfo, String> {
+    validate_runtime_path(&path)
+}
+
+#[tauri::command]
+pub async fn validate_moltorino_path(path: String) -> Result<ChatRuntimePathInfo, String> {
+    validate_chat_runtime_path(path).await
+}
+
+fn launch_runtime_with_configured(
+    path: Option<String>,
+    channel: String,
+    configured: String,
+) -> Result<LaunchOutcome, String> {
+    let raw = path.filter(|p| !p.trim().is_empty()).unwrap_or(configured);
+    let channel = normalize_channel(&channel);
+    if !is_valid_twitch_login(&channel) {
+        return Err(format!("\"{}\" isn't a valid Twitch channel name.", channel));
+    }
+    let runtime = resolve_chat_runtime(&raw)?;
+    spawn_moltorino(&runtime.executable_path, &channel)
+}
+
+/// Launch a compatible runtime with `-c t:<channel>` using the shared owned-child
+/// registry and lifecycle implementation.
+#[tauri::command]
+pub async fn launch_chat_runtime(
+    path: Option<String>,
+    channel: String,
+    state: tauri::State<'_, crate::models::settings::AppState>,
+) -> Result<LaunchOutcome, String> {
+    let configured = configured_runtime_path(&state)?;
+    launch_runtime_with_configured(path, channel, configured)
+}
+
 #[tauri::command]
 pub async fn launch_moltorino(
     path: Option<String>,
     channel: String,
     state: tauri::State<'_, crate::models::settings::AppState>,
 ) -> Result<LaunchOutcome, String> {
-    // Explicit argument wins; otherwise fall back to the persisted setting. The
-    // lock is scoped so it is released before we touch the filesystem or spawn.
-    let configured = {
-        let settings = state
-            .settings
-            .lock()
-            .map_err(|_| "Couldn't read settings.".to_string())?;
-        settings
-            .moltorino
-            .executable_path
-            .clone()
-            .unwrap_or_default()
-    };
-    // An explicitly-passed blank is treated as "not supplied" rather than an
-    // error, so a caller that always sends the field still gets the saved path.
-    let raw = path.filter(|p| !p.trim().is_empty()).unwrap_or(configured);
-
-    let channel = normalize_channel(&channel);
-    if !is_valid_twitch_login(&channel) {
-        return Err(format!(
-            "\"{}\" isn't a valid Twitch channel name.",
-            channel
-        ));
-    }
-
-    // Resolve through the shared runtime picker so an unset/blank path falls back
-    // to the bundled copy instead of erroring — same precedence the embed uses.
-    let runtime = resolve_moltorino_runtime(&raw)?;
-    spawn_moltorino(&runtime.path, &channel)
+    launch_chat_runtime(path, channel, state).await
 }
 
 #[cfg(windows)]
@@ -813,8 +900,9 @@ fn spawn_moltorino(_exe: &Path, _channel: &str) -> Result<LaunchOutcome, String>
 #[cfg(test)]
 mod tests {
     use super::{
-        bundled_runtime_path, display_path, is_valid_twitch_login, resolve_executable,
-        resolve_runtime_in, MoltorinoSource,
+        bundled_bluzyrino_path, display_path, identity_from_path, is_valid_twitch_login,
+        legacy_bundled_moltorino_path, resolve_executable, resolve_runtime_in,
+        runtime_status_for, ChatRuntimeIdentity, ChatRuntimeKind,
     };
     use std::path::Path;
 
@@ -930,85 +1018,126 @@ mod tests {
         assert!(err.contains(".exe"), "unexpected error text: {err}");
     }
 
-    // --- Bundled runtime resolution ------------------------------------------
+    // --- Chat runtime resolution ---------------------------------------------
 
-    /// The bundled location is exactly `<exe dir>\moltorino\Moltorino7.exe`.
     #[test]
-    fn bundled_path_is_moltorino7_beside_exe() {
+    fn bundled_paths_are_beside_the_streamnook_executable() {
         let exe_dir = Path::new(r"C:\Program Files\StreamNook");
-        let bundled = bundled_runtime_path(exe_dir);
-        assert!(bundled.ends_with(Path::new("moltorino").join("Moltorino7.exe")));
-        assert_eq!(bundled.parent().unwrap().file_name().unwrap(), "moltorino");
-        assert_eq!(bundled.parent().unwrap().parent().unwrap(), exe_dir);
+        assert!(bundled_bluzyrino_path(exe_dir)
+            .ends_with(Path::new("chat-runtime").join("Bluzyrino.exe")));
+        assert!(legacy_bundled_moltorino_path(exe_dir)
+            .ends_with(Path::new("moltorino").join("Moltorino7.exe")));
     }
 
-    /// A valid configured override outranks a valid bundled copy.
     #[test]
-    fn valid_custom_wins_over_valid_bundled() {
+    fn direct_custom_executables_accept_known_and_arbitrary_names() {
+        let tree = TempTree::new("direct_customs");
+        let exe_dir = tree.dir("app");
+        for (name, identity) in [
+            ("Bluzyrino.exe", ChatRuntimeIdentity::Bluzyrino),
+            ("Moltorino7.exe", ChatRuntimeIdentity::Moltorino),
+            ("CompatibleChat.exe", ChatRuntimeIdentity::Generic),
+        ] {
+            let custom = tree.file(&format!("custom/{name}"));
+            let runtime = resolve_runtime_in(&custom.to_string_lossy(), &exe_dir)
+                .expect("direct custom executable must resolve");
+            assert_eq!(runtime.kind, ChatRuntimeKind::Custom);
+            assert_eq!(runtime.identity(), identity);
+            assert_eq!(runtime.executable_path.file_name().unwrap(), name);
+        }
+    }
+
+    #[test]
+    fn custom_directory_prefers_bluzyrino_then_falls_back_to_moltorino() {
+        let tree = TempTree::new("custom_dirs");
+        let both = tree.dir("both");
+        tree.file("both/Bluzyrino.exe");
+        tree.file("both/Moltorino7.exe");
+        let exe_dir = tree.dir("app");
+        let runtime = resolve_runtime_in(&both.to_string_lossy(), &exe_dir).unwrap();
+        assert_eq!(runtime.executable_path.file_name().unwrap(), "Bluzyrino.exe");
+
+        let legacy = tree.dir("legacy");
+        tree.file("legacy/Moltorino7.exe");
+        let runtime = resolve_runtime_in(&legacy.to_string_lossy(), &exe_dir).unwrap();
+        assert_eq!(runtime.executable_path.file_name().unwrap(), "Moltorino7.exe");
+    }
+
+    #[test]
+    fn valid_custom_wins_over_both_bundles() {
         let tree = TempTree::new("custom_wins");
-        let custom = tree.file("custom/Moltorino7.exe");
-        // A real bundled copy also exists beside the (fake) exe dir.
+        let custom = tree.file("custom/CompatibleChat.exe");
+        let exe_dir = tree.dir("app");
+        tree.file("app/chat-runtime/Bluzyrino.exe");
+        tree.file("app/moltorino/Moltorino7.exe");
+        let runtime = resolve_runtime_in(&custom.to_string_lossy(), &exe_dir).unwrap();
+        assert_eq!(runtime.kind, ChatRuntimeKind::Custom);
+        assert!(runtime.executable_path.to_string_lossy().contains("custom"));
+    }
+
+    #[test]
+    fn bundled_bluzyrino_precedes_legacy_moltorino() {
+        let tree = TempTree::new("bundle_order");
+        let exe_dir = tree.dir("app");
+        tree.file("app/chat-runtime/Bluzyrino.exe");
+        tree.file("app/moltorino/Moltorino7.exe");
+        let runtime = resolve_runtime_in("", &exe_dir).unwrap();
+        assert_eq!(runtime.kind, ChatRuntimeKind::BundledBluzyrino);
+    }
+
+    #[test]
+    fn legacy_bundled_moltorino_remains_a_fallback() {
+        let tree = TempTree::new("legacy_bundle");
         let exe_dir = tree.dir("app");
         tree.file("app/moltorino/Moltorino7.exe");
-
-        let runtime = resolve_runtime_in(&custom.to_string_lossy(), &exe_dir)
-            .expect("a valid custom path must resolve");
-        assert_eq!(runtime.source, MoltorinoSource::CustomOverride);
-        assert!(runtime.path.ends_with("Moltorino7.exe"));
-        // Resolved to the custom copy, not the bundled one.
-        assert!(runtime.path.to_string_lossy().contains("custom"));
+        let runtime = resolve_runtime_in("", &exe_dir).unwrap();
+        assert_eq!(runtime.kind, ChatRuntimeKind::LegacyBundledMoltorino);
+        assert_eq!(runtime.source_status(), "bundled");
     }
 
-    /// An unusable configured path is logged and we fall back to the bundle.
     #[test]
-    fn invalid_custom_falls_back_to_bundled() {
+    fn invalid_custom_falls_back_to_available_bundle() {
         let tree = TempTree::new("invalid_falls_back");
         let exe_dir = tree.dir("app");
-        tree.file("app/moltorino/Moltorino7.exe");
-
-        let runtime = resolve_runtime_in(r"C:\nope\not\here\moltorino.exe", &exe_dir)
-            .expect("an invalid custom path must still resolve to the bundle");
-        assert_eq!(runtime.source, MoltorinoSource::BundledRuntime);
+        tree.file("app/chat-runtime/Bluzyrino.exe");
+        let runtime = resolve_runtime_in(r"C:\nope\not\here\chat.exe", &exe_dir).unwrap();
+        assert_eq!(runtime.kind, ChatRuntimeKind::BundledBluzyrino);
     }
 
-    /// An empty configured path means "use the bundle".
     #[test]
-    fn empty_custom_uses_bundled() {
-        let tree = TempTree::new("empty_uses_bundled");
+    fn unavailable_state_preserves_legacy_status_fields() {
+        let tree = TempTree::new("unavailable");
         let exe_dir = tree.dir("app");
-        tree.file("app/moltorino/Moltorino7.exe");
-
-        let runtime =
-            resolve_runtime_in("   ", &exe_dir).expect("empty path must resolve to the bundle");
-        assert_eq!(runtime.source, MoltorinoSource::BundledRuntime);
+        let status = runtime_status_for("", &exe_dir);
+        assert!(!status.available);
+        assert_eq!(status.source, None);
+        assert_eq!(status.executable_path, None);
+        assert!(status.error.is_some());
+        assert_eq!(status.runtime_kind, None);
     }
 
-    /// A configured *folder* resolves to the `Moltorino7.exe` inside it.
     #[test]
-    fn custom_directory_resolves_moltorino7() {
-        let tree = TempTree::new("custom_dir");
-        let custom_dir = tree.dir("MyMoltorino");
-        tree.file("MyMoltorino/Moltorino7.exe");
-        let exe_dir = tree.dir("app"); // no bundle here on purpose
+    fn status_source_semantics_remain_backward_compatible() {
+        let tree = TempTree::new("status_source");
+        let exe_dir = tree.dir("app");
+        let custom = tree.file("custom/Bluzyrino.exe");
+        let custom_status = runtime_status_for(&custom.to_string_lossy(), &exe_dir);
+        assert_eq!(custom_status.source.as_deref(), Some("custom"));
+        assert_eq!(custom_status.runtime_kind.as_deref(), Some("custom_bluzyrino"));
 
-        let runtime = resolve_runtime_in(&custom_dir.to_string_lossy(), &exe_dir)
-            .expect("a folder containing Moltorino7.exe must resolve");
-        assert_eq!(runtime.source, MoltorinoSource::CustomOverride);
-        assert_eq!(runtime.path.file_name().unwrap(), "Moltorino7.exe");
+        tree.file("app/chat-runtime/Bluzyrino.exe");
+        let bundled_status = runtime_status_for("", &exe_dir);
+        assert_eq!(bundled_status.source.as_deref(), Some("bundled"));
+        assert_eq!(bundled_status.runtime_kind.as_deref(), Some("bundled_bluzyrino"));
     }
 
-    /// Nothing configured and no bundle present is a clear missing-runtime error.
     #[test]
-    fn neither_present_is_missing_runtime_error() {
-        let tree = TempTree::new("neither");
-        let exe_dir = tree.dir("app"); // empty: no moltorino\Moltorino7.exe
-
-        let err =
-            resolve_runtime_in("", &exe_dir).expect_err("no custom path and no bundle must error");
-        assert!(
-            err.contains("Moltorino7.exe") || err.to_lowercase().contains("moltorino"),
-            "unexpected error text: {err}"
-        );
+    fn display_identity_is_case_insensitive_and_presentation_only() {
+        assert_eq!(identity_from_path(Path::new("BLUZYRINO.EXE")), ChatRuntimeIdentity::Bluzyrino);
+        assert_eq!(identity_from_path(Path::new("moltorino.exe")), ChatRuntimeIdentity::Moltorino);
+        assert_eq!(identity_from_path(Path::new("MOLTORINO7.EXE")), ChatRuntimeIdentity::Moltorino);
+        assert_eq!(identity_from_path(Path::new("Other.exe")), ChatRuntimeIdentity::Generic);
+        assert_eq!(ChatRuntimeIdentity::Generic.display_name(), "Chat runtime");
     }
 
     // --- Standalone process-ownership registry -------------------------------

@@ -102,7 +102,7 @@ import type { TwitchStream, HypeTrainData } from '../types';
 
 import { Logger } from '../utils/logger';
 import { useVisibleInterval } from '../utils/useVisibleInterval';
-import { canOpenInMoltorino as canOpenInMoltorinoGate } from '../utils/moltorinoRuntimeGate';
+import { canOpenInChatRuntime as canOpenInChatRuntimeGate } from '../utils/moltorinoRuntimeGate';
 
 // Channel Points hover tooltip — portalled to document.body to escape overflow-hidden
 const ChannelPointsTooltip = ({ anchorRef, customPointsIconUrl, customPointsName, isLoadingChannelPoints, channelPoints }: {
@@ -751,21 +751,25 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
   // exist, and only Rust knows. Read-only status query (never spawns Moltorino).
   // Fetched once on mount and re-fetched whenever the saved custom path changes,
   // so clearing/setting the path flips availability without an app restart.
-  const moltorinoStoredPath = settings.moltorino?.executable_path ?? '';
-  const [moltorinoRuntimeAvailable, setMoltorinoRuntimeAvailable] = useState(false);
+  const chatRuntimeStoredPath = settings.moltorino?.executable_path ?? '';
+  const [chatRuntimeStatus, setChatRuntimeStatus] = useState<{
+    available: boolean;
+    runtime_kind: 'bundled_bluzyrino' | 'custom_bluzyrino' | 'custom_moltorino' | 'custom' | 'legacy_bundled_moltorino' | null;
+    display_name: string | null;
+  }>({ available: false, runtime_kind: null, display_name: null });
   useEffect(() => {
     let alive = true;
-    invoke<{ available: boolean }>('moltorino_runtime_status')
+    invoke<typeof chatRuntimeStatus>('chat_runtime_status')
       .then((status) => {
-        if (alive) setMoltorinoRuntimeAvailable(status.available);
+        if (alive) setChatRuntimeStatus(status);
       })
       .catch(() => {
-        if (alive) setMoltorinoRuntimeAvailable(false);
+        if (alive) setChatRuntimeStatus({ available: false, runtime_kind: null, display_name: null });
       });
     return () => {
       alive = false;
     };
-  }, [moltorinoStoredPath]);
+  }, [chatRuntimeStoredPath]);
 
   // Moltorino: whether to offer "Open chat in Moltorino" beside Pop out chat.
   // Deliberately narrow — this is the ONE normal, main, live Twitch chat panel:
@@ -780,13 +784,19 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
   //   • !isVodReplay / live media only: replay chat is historical, so launching a
   //     live external chat for it would be misleading
   // Whispers never mount ChatWidget at all, so they're excluded by construction.
-  const canOpenInMoltorino =
+  const canOpenInChatRuntime =
     isTwitch &&
     !channelOverride &&
     !isMultiNookActive &&
     !isVodReplay &&
     currentMediaType === 'live' &&
-    canOpenInMoltorinoGate(settings.moltorino?.show_chat_button ?? false, moltorinoRuntimeAvailable);
+    canOpenInChatRuntimeGate(settings.moltorino?.show_chat_button ?? false, chatRuntimeStatus.available);
+  const chatRuntimeOpenLabel =
+    chatRuntimeStatus.display_name === 'Bluzyrino'
+      ? 'Open in Bluzyrino'
+      : chatRuntimeStatus.display_name === 'Moltorino'
+        ? 'Open in Moltorino'
+        : 'Open in chat runtime';
 
   // No-input channel-point redemptions (from Twitch's channel-wide community
   // points feed). Message-style and text-input rewards already surface in chat
@@ -3802,12 +3812,10 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
                       </button>
                     </Tooltip>
                   )}
-                  {/* Open chat in Moltorino — hands the channel to the user's own
-                      external chat client (see `canOpenInMoltorino` above for the
-                      gating). Fire-and-forget: StreamNook's native chat stays
-                      connected and on screen, nothing here is torn down. */}
-                  {currentStream && canOpenInMoltorino && (
-                    <Tooltip content="Open chat in Moltorino" side="top">
+                  {/* Open the active channel in the resolved compatible runtime.
+                      Native chat remains connected and on screen. */}
+                  {currentStream && canOpenInChatRuntime && (
+                    <Tooltip content={chatRuntimeOpenLabel} side="top">
                       <button
                         type="button"
                         onClick={async (e) => {
@@ -3817,17 +3825,17 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
                             // path: null — let the backend read the persisted
                             // setting so there's one authoritative source for
                             // which executable actually gets spawned.
-                            await invoke('launch_moltorino', { path: null, channel });
+                            await invoke('launch_chat_runtime', { path: null, channel });
                             useAppStore
                               .getState()
-                              .addToast(`Opening ${channel} in Moltorino`, 'success');
+                              .addToast(`${chatRuntimeOpenLabel}: ${channel}`, 'success');
                           } catch (err) {
-                            Logger.error('[ChatWidget] Launch Moltorino failed:', err);
+                            Logger.error('[ChatWidget] Launch chat runtime failed:', err);
                             useAppStore.getState().addToast(String(err), 'error');
                           }
                         }}
                         className="pointer-events-auto grid h-5 w-5 place-items-center rounded text-textSecondary transition-colors hover:bg-surface-hover hover:text-textPrimary"
-                        aria-label="Open chat in Moltorino"
+                        aria-label={chatRuntimeOpenLabel}
                       >
                         <MessagesSquare className="h-[13px] w-[13px]" />
                       </button>

@@ -1212,11 +1212,18 @@ fn main() {
             plugins_provides,
             plugins_report_stream_event,
             plugins_ui_bundle,
-            // Moltorino integration (optional external chat client)
+            // Generic compatible chat-runtime commands
+            validate_chat_runtime_path,
+            launch_chat_runtime,
+            chat_runtime_status,
+            chat_runtime_embed_start,
+            chat_runtime_embed_set_bounds,
+            chat_runtime_embed_set_channel,
+            chat_runtime_embed_stop,
+            // Legacy IPC names retained as wrappers over the same runtime state
             validate_moltorino_path,
             launch_moltorino,
             moltorino_runtime_status,
-            // Moltorino embedded chat (Phase 2): Win32-hosted chat surface
             moltorino_embed_start,
             moltorino_embed_set_bounds,
             moltorino_embed_set_channel,

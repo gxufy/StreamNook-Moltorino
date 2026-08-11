@@ -301,7 +301,8 @@ mod imp {
 
     /// Event emitted to the frontend when the embedded surface can't be used and
     /// the UI must fall back to native chat.
-    const FALLBACK_EVENT: &str = "moltorino-embed-fallback";
+    const FALLBACK_EVENT: &str = "chat-runtime-embed-fallback";
+    const LEGACY_FALLBACK_EVENT: &str = "moltorino-embed-fallback";
 
     /// One command from the async command layer to the owning message-loop
     /// thread. Everything the thread touches lives on that thread; commands carry
@@ -1255,6 +1256,7 @@ mod imp {
                                         let _ = proc.wait();
                                     }
                                     let _ = state.app.emit(FALLBACK_EVENT, reason.as_str());
+                                    let _ = state.app.emit(LEGACY_FALLBACK_EVENT, reason.as_str());
                                     clear_global_if(state.host.0 as isize);
                                     let _ = DestroyWindow(state.host);
                                 }
@@ -1329,6 +1331,7 @@ mod imp {
                         state.child = None;
                         state.child_proc = None;
                         let _ = state.app.emit(FALLBACK_EVENT, "process-exited");
+                        let _ = state.app.emit(LEGACY_FALLBACK_EVENT, "process-exited");
                         clear_global_if(state.host.0 as isize);
                         let _ = DestroyWindow(state.host);
                     }
@@ -1592,10 +1595,10 @@ mod imp {
         let runtime = resolve_moltorino_runtime(exe_path)?;
         log::debug!(
             "[Moltorino] embed runtime resolved: source={} path={}",
-            runtime.source.as_status(),
-            display_path(&runtime.path)
+            runtime.source_status(),
+            display_path(&runtime.executable_path)
         );
-        let exe = runtime.path;
+        let exe = runtime.executable_path;
 
         let mut guard = embed()
             .lock()
@@ -1781,7 +1784,7 @@ mod imp {
 /// Start (or reuse) the embedded Moltorino host and follow `channel`.
 #[cfg(windows)]
 #[tauri::command]
-pub async fn moltorino_embed_start(
+pub async fn chat_runtime_embed_start(
     channel: String,
     x: i32,
     y: i32,
@@ -1825,7 +1828,7 @@ pub async fn moltorino_embed_start(
 /// Update the embedded host's position/size/visibility.
 #[cfg(windows)]
 #[tauri::command]
-pub async fn moltorino_embed_set_bounds(
+pub async fn chat_runtime_embed_set_bounds(
     x: i32,
     y: i32,
     width: i32,
@@ -1838,15 +1841,57 @@ pub async fn moltorino_embed_set_bounds(
 /// Point the embedded host at a different Twitch channel.
 #[cfg(windows)]
 #[tauri::command]
-pub async fn moltorino_embed_set_channel(channel: String) -> Result<(), String> {
+pub async fn chat_runtime_embed_set_channel(channel: String) -> Result<(), String> {
     imp::set_channel(channel)
 }
 
 /// Tear the embedded host down and return to native chat.
 #[cfg(windows)]
 #[tauri::command]
-pub async fn moltorino_embed_stop() -> Result<(), String> {
+pub async fn chat_runtime_embed_stop() -> Result<(), String> {
     imp::stop()
+}
+
+// Legacy IPC names. These call the same functions and therefore share the one
+// embed handle, process, host window, and lifecycle state.
+#[cfg(windows)]
+#[tauri::command]
+pub async fn moltorino_embed_start(
+    channel: String,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    visible: bool,
+    window: tauri::WebviewWindow,
+    state: tauri::State<'_, crate::models::settings::AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    chat_runtime_embed_start(channel, x, y, width, height, visible, window, state, app).await
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub async fn moltorino_embed_set_bounds(
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    visible: bool,
+) -> Result<(), String> {
+    chat_runtime_embed_set_bounds(x, y, width, height, visible).await
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub async fn moltorino_embed_set_channel(channel: String) -> Result<(), String> {
+    chat_runtime_embed_set_channel(channel).await
+}
+
+#[cfg(windows)]
+#[tauri::command]
+pub async fn moltorino_embed_stop() -> Result<(), String> {
+    chat_runtime_embed_stop().await
 }
 
 /// Synchronous teardown for the app-exit path (called from `RunEvent::Exit`,
@@ -1868,7 +1913,7 @@ pub fn moltorino_embed_stop_sync() {}
 // surface identical while making the feature inert off-Windows.
 #[cfg(not(windows))]
 #[tauri::command]
-pub async fn moltorino_embed_start(
+pub async fn chat_runtime_embed_start(
     _channel: String,
     _x: i32,
     _y: i32,
@@ -1881,7 +1926,7 @@ pub async fn moltorino_embed_start(
 
 #[cfg(not(windows))]
 #[tauri::command]
-pub async fn moltorino_embed_set_bounds(
+pub async fn chat_runtime_embed_set_bounds(
     _x: i32,
     _y: i32,
     _width: i32,
@@ -1893,14 +1938,51 @@ pub async fn moltorino_embed_set_bounds(
 
 #[cfg(not(windows))]
 #[tauri::command]
-pub async fn moltorino_embed_set_channel(_channel: String) -> Result<(), String> {
+pub async fn chat_runtime_embed_set_channel(_channel: String) -> Result<(), String> {
     Ok(())
 }
 
 #[cfg(not(windows))]
 #[tauri::command]
-pub async fn moltorino_embed_stop() -> Result<(), String> {
+pub async fn chat_runtime_embed_stop() -> Result<(), String> {
     Ok(())
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub async fn moltorino_embed_start(
+    channel: String,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    visible: bool,
+) -> Result<(), String> {
+    chat_runtime_embed_start(channel, x, y, width, height, visible).await
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub async fn moltorino_embed_set_bounds(
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    visible: bool,
+) -> Result<(), String> {
+    chat_runtime_embed_set_bounds(x, y, width, height, visible).await
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub async fn moltorino_embed_set_channel(channel: String) -> Result<(), String> {
+    chat_runtime_embed_set_channel(channel).await
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+pub async fn moltorino_embed_stop() -> Result<(), String> {
+    chat_runtime_embed_stop().await
 }
 
 #[cfg(test)]

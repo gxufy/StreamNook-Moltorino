@@ -34,7 +34,7 @@ import {
   type FocusedChatTarget,
 } from '../../utils/focusedChatTarget';
 import { createDedupingDebouncer } from '../../utils/embedSyncDebounce';
-import { isMoltorinoEmbedCandidate } from '../../utils/moltorinoRuntimeGate';
+import { isChatRuntimeEmbedCandidate } from '../../utils/moltorinoRuntimeGate';
 import { Logger } from '../../utils/logger';
 
 /// Delay before a resolved channel change is pushed to Moltorino. Long enough to
@@ -113,7 +113,7 @@ const ChatSurface = () => {
   const [runtimeAvailable, setRuntimeAvailable] = useState<boolean | null>(null);
   useEffect(() => {
     let alive = true;
-    invoke<{ available: boolean }>('moltorino_runtime_status')
+    invoke<{ available: boolean }>('chat_runtime_status')
       .then((status) => {
         if (alive) setRuntimeAvailable(status.available);
       })
@@ -143,7 +143,7 @@ const ChatSurface = () => {
   // native chat stays up and we never spin up the host or a WebView cutout
   // speculatively. `surfaceVisible` is false while Settings is open, so the native
   // Moltorino window can't draw through the Settings overlay.
-  const embedCandidate = isMoltorinoEmbedCandidate(embeddedEnabled, runtimeAvailable, surfaceVisible);
+  const embedCandidate = isChatRuntimeEmbedCandidate(embeddedEnabled, runtimeAvailable, surfaceVisible);
 
   // One debouncer for the lifetime of the surface. It commits the resolved
   // channel (or null) into React state; dedup means an unchanged channel never
@@ -202,7 +202,7 @@ const ChatSurface = () => {
   const prevEmbedCandidate = useRef(embedCandidate);
   useEffect(() => {
     if (prevEmbedCandidate.current && !embedCandidate) {
-      invoke('moltorino_embed_stop').catch((err) => {
+      invoke('chat_runtime_embed_stop').catch((err) => {
         Logger.warn('[Moltorino] embed stop failed:', err);
       });
     }

@@ -4,33 +4,33 @@
 // is the backend resolver's `available` result (the source of truth) — NOT any
 // executable-path string. These tests therefore never construct or mock a path;
 // they feed the resolved boolean|null status directly, exactly as the components
-// receive it from `moltorino_runtime_status`.
+// receive it from `chat_runtime_status`.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { isMoltorinoEmbedCandidate, canOpenInMoltorino } from './moltorinoRuntimeGate.ts';
+import { isChatRuntimeEmbedCandidate, canOpenInChatRuntime } from './moltorinoRuntimeGate.ts';
 
 // --- Embed candidate (embedded-chat surface) ---
 //
-// Signature: isMoltorinoEmbedCandidate(embeddedEnabled, runtimeAvailable, surfaceVisible).
+// Signature: isChatRuntimeEmbedCandidate(embeddedEnabled, runtimeAvailable, surfaceVisible).
 // The primary surface is visible in these baseline cases (surfaceVisible=true)
 // unless the test is specifically about the surface being hidden.
 
 test('embedded enabled + bundled runtime available + surface visible -> embed candidate true', () => {
-  assert.equal(isMoltorinoEmbedCandidate(true, true, true), true);
+  assert.equal(isChatRuntimeEmbedCandidate(true, true, true), true);
 });
 
 test('embedded enabled + runtime unavailable + surface visible -> embed candidate false', () => {
-  assert.equal(isMoltorinoEmbedCandidate(true, false, true), false);
+  assert.equal(isChatRuntimeEmbedCandidate(true, false, true), false);
 });
 
 test('embedded enabled + status loading (null) + surface visible -> embed candidate false', () => {
-  assert.equal(isMoltorinoEmbedCandidate(true, null, true), false);
+  assert.equal(isChatRuntimeEmbedCandidate(true, null, true), false);
 });
 
 test('embedded disabled + runtime available + surface visible -> embed candidate false', () => {
-  assert.equal(isMoltorinoEmbedCandidate(false, true, true), false);
+  assert.equal(isChatRuntimeEmbedCandidate(false, true, true), false);
 });
 
 // --- Surface visibility (Settings overlay) ---
@@ -41,16 +41,16 @@ test('embedded disabled + runtime available + surface visible -> embed candidate
 // other terms, so the host unmounts and its teardown restores the WebView region.
 
 test('surface hidden (Settings open) + enabled + runtime available -> embed candidate false', () => {
-  assert.equal(isMoltorinoEmbedCandidate(true, true, false), false);
+  assert.equal(isChatRuntimeEmbedCandidate(true, true, false), false);
 });
 
 test('returning surface visibility to true permits embedding again', () => {
   // Hidden while Settings is open...
-  assert.equal(isMoltorinoEmbedCandidate(true, true, false), false);
+  assert.equal(isChatRuntimeEmbedCandidate(true, true, false), false);
   // ...and re-enabled the moment the surface is visible again (Settings closed),
   // with no other state having changed. This is what lets the host remount
   // automatically on close without an app restart.
-  assert.equal(isMoltorinoEmbedCandidate(true, true, true), true);
+  assert.equal(isChatRuntimeEmbedCandidate(true, true, true), true);
 });
 
 // --- Open-in-Moltorino button ---
@@ -60,19 +60,19 @@ test('returning surface visibility to true permits embedding again', () => {
 // two-term shape: show-button setting + runtime available.
 
 test('show-button enabled + bundled runtime available -> button available', () => {
-  assert.equal(canOpenInMoltorino(true, true), true);
+  assert.equal(canOpenInChatRuntime(true, true), true);
 });
 
 test('show-button enabled + runtime unavailable -> button unavailable', () => {
-  assert.equal(canOpenInMoltorino(true, false), false);
+  assert.equal(canOpenInChatRuntime(true, false), false);
 });
 
 test('show-button enabled + status loading (null) -> button unavailable', () => {
-  assert.equal(canOpenInMoltorino(true, null), false);
+  assert.equal(canOpenInChatRuntime(true, null), false);
 });
 
 test('show-button disabled + runtime available -> button unavailable', () => {
-  assert.equal(canOpenInMoltorino(false, true), false);
+  assert.equal(canOpenInChatRuntime(false, true), false);
 });
 
 // --- Availability abstracts away *why* the resolver said yes ---
@@ -86,13 +86,13 @@ test('show-button disabled + runtime available -> button unavailable', () => {
 test('invalid custom override falling through to a valid bundle (available=true) enables both gates', () => {
   // The backend resolver rejected the custom override but found the bundle, so it
   // reports available=true. Both gates must open on that alone (surface visible).
-  assert.equal(isMoltorinoEmbedCandidate(true, true, true), true);
-  assert.equal(canOpenInMoltorino(true, true), true);
+  assert.equal(isChatRuntimeEmbedCandidate(true, true, true), true);
+  assert.equal(canOpenInChatRuntime(true, true), true);
 });
 
 test('empty custom path with a valid bundle (available=true) enables both gates', () => {
   // The custom field is blank; the resolver still finds the bundled runtime and
   // reports available=true. Both gates must open — no non-empty path required.
-  assert.equal(isMoltorinoEmbedCandidate(true, true, true), true);
-  assert.equal(canOpenInMoltorino(true, true), true);
+  assert.equal(isChatRuntimeEmbedCandidate(true, true, true), true);
+  assert.equal(canOpenInChatRuntime(true, true), true);
 });

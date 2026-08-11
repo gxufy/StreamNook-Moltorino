@@ -1151,31 +1151,31 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   },
   {
     tab: 'Integrations',
-    section: 'Moltorino',
+    section: 'Chat Runtime',
     sectionId: 'settings-section-moltorino',
-    title: 'Moltorino',
-    description: 'Open chat in Moltorino, a Chatterino-style Twitch chat client that ships with StreamNook. Chatterino fork, third-party chat, separate window, bundled, built-in, launch.'
+    title: 'Chat Runtime',
+    description: 'Use bundled Bluzyrino or a compatible custom chat runtime such as Moltorino. Third-party Twitch chat, separate window, bundled, built-in, launch.'
   },
   {
     tab: 'Integrations',
-    section: 'Moltorino',
+    section: 'Chat Runtime',
     sectionId: 'settings-section-moltorino',
-    title: 'Custom Moltorino path (advanced)',
-    description: 'Override the bundled Moltorino with your own install. Leave empty to use the copy that ships with StreamNook. Browse for Moltorino7.exe, exe location, runtime status, custom path.'
+    title: 'Custom chat executable',
+    description: 'Override bundled Bluzyrino with a compatible executable. Browse for Bluzyrino.exe, Moltorino7.exe, or another compatible exe; runtime status, custom path.'
   },
   {
     tab: 'Integrations',
-    section: 'Moltorino',
+    section: 'Chat Runtime',
     sectionId: 'settings-section-moltorino',
-    title: 'Show chat button',
-    description: 'Show the "Open chat in Moltorino" button in the Twitch chat header, beside Pop out chat. Opt-in; StreamNook native chat stays the default.'
+    title: 'Open chat externally',
+    description: 'Show an Open in Bluzyrino, Open in Moltorino, or Open in chat runtime button beside Pop out chat. Opt-in; native chat stays active.'
   },
   {
     tab: 'Integrations',
-    section: 'Moltorino',
+    section: 'Chat Runtime',
     sectionId: 'settings-section-moltorino',
-    title: 'Embed chat in StreamNook',
-    description: 'Embed Moltorino inside the main chat panel instead of a separate window, following the channel you watch. Windows only. Native chat takes over for VODs, non-Twitch, and offline chat. Inline, docked, integrated chat.'
+    title: 'Embedded chat',
+    description: 'Embed a compatible Bluzyrino or Moltorino runtime in the main chat panel. Windows only. Native chat takes over for unsupported contexts.'
   },
   {
     tab: 'Integrations',

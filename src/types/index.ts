@@ -92,9 +92,9 @@ export interface ChatLoggingSettings {
   timestamps?: boolean; // Start each line with the time it was sent (default: true)
 }
 
-// Optional external Moltorino chat integration. Mirrors MoltorinoSettings on the
-// Rust side. StreamNook never bundles Moltorino; the user points this at their
-// own install. Machine-local, so it is excluded from portable settings backups.
+// Compatible external/embedded chat runtime settings. The legacy interface and
+// serialized object name are retained so existing Moltorino settings round-trip
+// unchanged. Machine-local, so it is excluded from portable settings backups.
 export interface MoltorinoSettings {
   executable_path?: string; // Absolute path to the user's Moltorino .exe; unset = integration inert
   show_chat_button?: boolean; // Show "Open chat in Moltorino" in the chat header (default: false)
