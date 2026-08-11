@@ -1,3 +1,27 @@
+## [8.4.0] - 2026-08-10
+
+## 🎉 New: Chat replay on clips
+> Clips now play with the chat that was live when they happened, right beside the video. Scrub backwards and the chat rewinds with you. It works for clips opened from a profile, from a link in chat, or from browse, and it shows paints, badges and emotes exactly the way live chat does.
+
+---
+
+### ✨ Features
+- Clips now replay the chat from the moment they were captured, in a panel beside the video. Turn it off any time in Chat settings.
+- VODs opened from a streamer's Videos tab now show chat replay. Previously only the Watch VOD shortcut did.
+- Your stream overlay gained text controls. Justify left, center or right, pick a text weight, and turn on italic or strikethrough.
+- Overlay text shadow is now adjustable. Choose its color, size and strength instead of just on or off.
+- Gigantified emotes on the overlay can sit left, centered, right, or inline right after the name.
+- Bits messages on the overlay can render as an event card like subs and raids, or stay inline as a normal message.
+
+### 🐛 Bug Fixes
+- The profile popout no longer opens on a different monitor than the one you clicked on.
+- Streamer profile pictures now appear while watching a VOD or a clip.
+- The loading mark animates again for anyone with Windows animation effects turned off.
+- Scrubbing backwards in a clip now takes away the chat that has not happened yet.
+
+### 🔧 Maintenance
+- A fresh set of loading messages and emotes.
+
 ## [8.3.12] - 2026-08-07
 
 ### ✨ Features
