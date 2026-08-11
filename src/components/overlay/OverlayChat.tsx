@@ -56,6 +56,22 @@ const giantEmoteUrl = (url: string, id?: string): string => {
   return url;
 };
 
+// The text shadow, built from the streamer's chosen color / size / strength. Two
+// layers, the same shape as the fixed value it replaces: a hard drop plus a soft halo
+// at ~65% of the chosen strength. Sized in EM, not px, because the overlay renders
+// supersampled and is scaled back down — a raw px blur lands at half its intended size
+// (the same sub-pixel trap as the bubble radius and the outline stroke).
+const textShadowCss = (style: OverlayStyle): string | undefined => {
+  if (!style.textShadow) return undefined;
+  const px = Math.max(0, style.textShadowSize ?? 2);
+  if (px === 0) return undefined;
+  const em = (v: number) => `${(v / Math.max(8, style.fontSize)).toFixed(3)}em`;
+  const color = style.textShadowColor || '#000000';
+  const alpha = Math.max(0, Math.min(1, style.textShadowOpacity ?? 0.85));
+  const tint = (mul: number) => `color-mix(in srgb, ${color} ${Math.round(alpha * mul * 100)}%, transparent)`;
+  return `0 ${em(px / 2)} ${em(px)} ${tint(1)}, 0 0 ${em(px)} ${tint(0.65)}`;
+};
+
 // Resolve an emote to a display URL: the baked URL if present, else rebuilt from the
 // id. On a load failure, retry the id-rebuilt URL once before falling back to the
 // text code — so a stale/wrong baked URL still resolves to a working image. Giant
@@ -75,7 +91,11 @@ const EmoteImg = ({ segment, emoteScale, giant = false }: { segment: Extract<Mes
       loading="lazy"
       referrerPolicy="no-referrer"
       className="inline-block w-auto align-middle"
-      style={{ height: `calc(${giant ? 8 : 2}em * ${emoteScale})`, maxWidth: `calc(${giant ? 24 : 9}em * ${emoteScale})`, margin: '0 0.125rem', verticalAlign: '-0.35em' }}
+      // A giant emote sits inline when the placement is 'inline'; hanging an 8em image
+      // at -0.35em drags the line box down and pushes the name off the top, so center
+      // it against the text instead. No-op in the block placements, where the giant is
+      // alone in a flex row and vertical-align does not apply.
+      style={{ height: `calc(${giant ? 8 : 2}em * ${emoteScale})`, maxWidth: `calc(${giant ? 24 : 9}em * ${emoteScale})`, margin: '0 0.125rem', verticalAlign: giant ? 'middle' : '-0.35em' }}
       onError={() => {
         if (giant && inline && src !== inline) setSrc(inline);
         else if (rebuilt && src !== rebuilt) setSrc(rebuilt);
@@ -187,6 +207,19 @@ const CATEGORY_OF: Record<string, EventCategory> = {
 
 const categoryOf = (msgType?: string): EventCategory =>
   (msgType && CATEGORY_OF[msgType]) || 'announcement';
+
+// A Twitch bits cheer arrives as an ordinary chat message carrying a bit count, not as
+// a USERNOTICE with a msg-id, so it never reaches the event branch on its own. This is
+// what promotes it when the streamer asks for the card treatment. Kept next to
+// CATEGORY_OF because the row and the list-level filter both have to agree on it.
+const isCheerMessage = (m: OverlayMessage): boolean =>
+  (m.provider ?? 'twitch') === 'twitch' && (m.metadata?.bits_amount ?? 0) > 0;
+
+// Twitch's own animated gem for the tier, matching the in-app cheer card.
+const cheerGemUrl = (bits: number): string => {
+  const tier = bits >= 10000 ? '10000' : bits >= 5000 ? '5000' : bits >= 1000 ? '1000' : bits >= 100 ? '100' : '1';
+  return `https://d3aqoihi2n8ty8.cloudfront.net/actions/cheer/dark/animated/${tier}/2.gif`;
+};
 
 const CATEGORY_ICON: Record<EventCategory, typeof Gift> = {
   subscription: Star, gift: Gift, raid: Users, cheer: DollarSign,
@@ -500,7 +533,7 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
     isolation: 'isolate',
     overflow: 'hidden',
     lineHeight: style.lineHeight,
-    textShadow: style.textShadow ? '0 1px 2px rgba(0,0,0,0.85), 0 0 2px rgba(0,0,0,0.55)' : undefined,
+    textShadow: textShadowCss(style),
     ...(atmosphere ? { padding: '2px 6px', borderRadius: 6 } : null),
     // Ring/bar thickness is in EM, not px: the overlay renders supersampled
     // (2x, scaled back down) and the builder preview scales tall canvases down
@@ -607,9 +640,16 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
   // never a blank normal message.
   const msgType = message.metadata?.msg_type || message.tags?.['msg-id'];
   const systemMessage = message.metadata?.system_message || message.tags?.['system-msg']?.replace(/\\s/g, ' ');
-  if (systemMessage || (msgType && !!CATEGORY_OF[msgType])) {
-    const category = categoryOf(msgType);
-    const rawEventText = systemMessage || eventFallback(category, message.display_name || message.username);
+  // A cheer has no system-msg and no msg-id, so it only lands here when the streamer
+  // asked for the card. Checked BEFORE msg-id, matching the in-app chat, which returns
+  // its cheer card ahead of every other branch.
+  const cheerBits = message.metadata?.bits_amount ?? 0;
+  const asCheerEvent = style.cheerDisplay === 'event' && isCheerMessage(message);
+  if (systemMessage || asCheerEvent || (msgType && !!CATEGORY_OF[msgType])) {
+    const category: EventCategory = asCheerEvent ? 'cheer' : categoryOf(msgType);
+    const rawEventText = asCheerEvent
+      ? `cheered ${cheerBits.toLocaleString()} bits`
+      : systemMessage || eventFallback(category, message.display_name || message.username);
     // Convert the amount in a YouTube Super Chat / Super Sticker to the chosen target
     // currency (no-op unless a target is set + rates are loaded).
     const text = style.superchatCurrency && (msgType === 'superchat' || msgType === 'supersticker')
@@ -671,7 +711,7 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
       ? (message.segments ?? []).filter((s) => s.type === 'emote' || s.type === 'emoji')
       : [];
     return (
-      <div className={`sn-ov-row ${entranceClass}${retractedClass}`} style={{ flexShrink: 0, lineHeight: style.lineHeight, textShadow: style.textShadow ? '0 1px 2px rgba(0,0,0,0.85)' : undefined, display: 'flex', alignItems: 'flex-start', gap: '0.35em' }} data-provider={provider} data-ov-row="">
+      <div className={`sn-ov-row ${entranceClass}${retractedClass}`} style={{ flexShrink: 0, lineHeight: style.lineHeight, textShadow: textShadowCss(style), display: 'flex', alignItems: 'flex-start', gap: '0.35em' }} data-provider={provider} data-ov-row="">
         {/* Source tag lives OUTSIDE the event highlight — it's its own thing, so
             the platform indicator is consistent with normal messages. */}
         {style.sourceTag !== 'none' && (
@@ -708,7 +748,11 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
           }}
         >
           <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', height: '1.5em' }}>
-            {isWatchStreak ? (
+            {asCheerEvent ? (
+              // Twitch's own animated gem for the tier, so a promoted cheer reads the
+              // same as the in-app cheer card rather than a generic currency glyph.
+              <img src={cheerGemUrl(cheerBits)} alt="" style={{ height: '1.25em', width: 'auto', objectFit: 'contain' }} />
+            ) : isWatchStreak ? (
               // Twitch's own fire glyph, matching the in-app watch-streak card.
               <svg width="1em" height="1em" viewBox="0 0 20 20" fill="#fb923c" aria-hidden="true">
                 <path fillRule="evenodd" clipRule="evenodd" d="M11 4.5 9 2 4.8 6.9A7.48 7.48 0 0 0 3 11.77C3 15.2 5.8 18 9.23 18h1.65A6.12 6.12 0 0 0 17 11.88c0-1.86-.65-3.66-1.84-5.1L12 3l-1 1.5ZM6.32 8.2 9 5l2 2.5L12 6l1.62 2.07A5.96 5.96 0 0 1 15 11.88c0 2.08-1.55 3.8-3.56 4.08.36-.47.56-1.05.56-1.66 0-.52-.18-1.02-.5-1.43L10 11l-1.5 1.87c-.32.4-.5.91-.5 1.43 0 .6.2 1.18.54 1.64A4.23 4.23 0 0 1 5 11.77c0-1.31.47-2.58 1.32-3.57Z" />
@@ -726,7 +770,9 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
                 event action; StreamNook style adds the signature multi-color wash. */}
             <div className="min-w-0">
               {nameAndBadges}
-              <span style={{ fontWeight: 400 }}> {finalAction}</span>
+              {/* Weight comes from the container (style.fontWeight), so event text
+                  tracks the streamer's choice alongside message text. */}
+              <span> {finalAction}</span>
               {streakPoints > 0 && (
                 <span style={{ color: '#fb923c', fontWeight: 700, marginLeft: '0.35em', whiteSpace: 'nowrap' }}>
                   <svg width="0.9em" height="0.9em" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" style={{ display: 'inline', verticalAlign: '-0.1em', marginRight: '0.15em' }}>
@@ -745,7 +791,7 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
               // accent bar is pinned to the FAR LEFT (not flush against the text), with
               // a gap, so the chat clearly reads as dropping under the announcement.
               // The bar stretches to the chat's height (grows if the message wraps).
-              <div style={{ display: 'flex', gap: '0.5em', marginTop: '0.2em', fontWeight: 400, opacity: 0.95 }}>
+              <div style={{ display: 'flex', gap: '0.5em', marginTop: '0.2em', opacity: 0.95 }}>
                 <span aria-hidden="true" style={{ flexShrink: 0, width: '2px', borderRadius: '1px', background: 'color-mix(in srgb, currentColor 45%, transparent)' }} />
                 <span style={{ minWidth: 0 }}>
                   {message.segments!.map((seg, i) => (
@@ -778,13 +824,20 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
       }
     }
   }
+  // 'inline' leaves the giant where the sender typed it — on an emote-only message that
+  // puts it right after the name, like an ordinary message body. The other three pluck
+  // it onto its own line below and only choose that line's alignment.
+  const giantAlign = style.giantEmoteAlign ?? 'center';
+  const giantInline = giantIdx >= 0 && giantAlign === 'inline';
 
   // Long-message clamp: cap the whole rendered line block at N lines with an
   // ellipsis, so one copypasta can't eat the canvas. The -webkit-box line-clamp
   // works over the mixed inline content (badges, name, emotes) as line boxes.
   const clampLines = Math.round(style.maxMessageLines ?? 0);
+  // Skipped for an inline giant: the clamp would slice an 8em image mid-emote, and the
+  // block placements dodge this by living outside the clamped div entirely.
   const lineClampStyle =
-    clampLines >= 1
+    clampLines >= 1 && !giantInline
       ? { display: '-webkit-box', WebkitLineClamp: Math.min(6, clampLines), WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }
       : null;
 
@@ -803,17 +856,35 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
       {/* /me actions drop the colon and render the body in the sender's color,
           italic — the Twitch convention. */}
       {message.metadata?.is_action ? ' ' : <><span style={{ color, fontWeight: 700 }}>:</span>{' '}</>}
-      <span style={{ fontWeight: 400, ...(message.metadata?.is_action ? { color, fontStyle: 'italic' } : null) }}>
+      {/* Italic and strikethrough live HERE, not on the container: a text-decoration set
+          on an ancestor is drawn across every descendant and a child cannot cancel it, so
+          on the container a strikethrough would permanently strike names, badges and
+          events. Weight is safe to inherit, so it comes from the container. */}
+      <span
+        style={{
+          ...(style.textItalic === true ? { fontStyle: 'italic' as const } : null),
+          ...(style.textStrikethrough === true ? { textDecoration: 'line-through' as const } : null),
+          ...(message.metadata?.is_action ? { color, fontStyle: 'italic' as const } : null),
+        }}
+      >
         {bodySegs.map((seg, i) => (
-          i === giantIdx ? null : <OverlaySegment key={i} segment={seg} emoteScale={style.emoteScale} emojiStyle={style.emojiStyle} />
+          i === giantIdx && !giantInline
+            ? null
+            : <OverlaySegment key={i} segment={seg} emoteScale={style.emoteScale} emojiStyle={style.emojiStyle} giant={i === giantIdx && giantInline} />
         ))}
       </span>
     </div>
   );
 
-  // The plucked gigantified emote, centered below the message line.
-  const giantBlock = giantIdx >= 0 ? (
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '0.2em' }}>
+  // The plucked gigantified emote on its own line below the message line.
+  const giantBlock = giantIdx >= 0 && !giantInline ? (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: giantAlign === 'left' ? 'flex-start' : giantAlign === 'right' ? 'flex-end' : 'center',
+        marginTop: '0.2em',
+      }}
+    >
       <OverlaySegment segment={bodySegs[giantIdx]} emoteScale={style.emoteScale} emojiStyle={style.emojiStyle} giant />
     </div>
   ) : null;
@@ -1007,7 +1078,14 @@ export const OverlayChat = ({ messages, style: rawStyle, superSample = 1 }: { me
         link.rel = 'stylesheet';
         document.head.appendChild(link);
       }
-      link.href = `https://fonts.bunny.net/css2?family=${encodeURIComponent(fam).replace(/%20/g, '+')}:wght@400;600;700&display=swap`;
+      // Ask for the whole 300-700 range and both slants, so the weight control and the
+      // italic toggle get REAL faces instead of the browser faking them. Bunny is lenient
+      // where Google's css2 is strict: it answers 200 and silently drops faces a family
+      // does not have (a single-weight font like Bebas Neue returns just its 400), so a
+      // wider request can never break the stylesheet. The browser downloads only the
+      // faces actually used, so this costs one slightly larger CSS response and no extra
+      // font fetches.
+      link.href = `https://fonts.bunny.net/css2?family=${encodeURIComponent(fam).replace(/%20/g, '+')}:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap`;
     }, 250);
     return () => clearTimeout(timer);
   }, [style.fontFamily]);
@@ -1124,6 +1202,11 @@ export const OverlayChat = ({ messages, style: rawStyle, superSample = 1 }: { me
       if (isBlockedUser(m)) return false;
       const mt = m.metadata?.msg_type || m.tags?.['msg-id'];
       const isEvent = !!(m.metadata?.system_message || m.tags?.['system-msg']) || (mt ? !!CATEGORY_OF[mt] : false);
+      // A cheer joins events for the category hide ONLY. It stays subject to the command
+      // and phrase filters below, in both display modes, because unlike a sub — whose
+      // text is Twitch's own system-msg — a cheer body is arbitrary user-typed text, and
+      // exempting it would punch a hole in the streamer's phrase filter.
+      const isCheer = isCheerMessage(m);
       // Hide command messages (never events): prefix entries match the message
       // start; specific entries match the first word exactly.
       if (!isEvent && style.hideCommands && cmdFilters.length) {
@@ -1140,8 +1223,12 @@ export const OverlayChat = ({ messages, style: rawStyle, superSample = 1 }: { me
         const body = (m.content ?? '').toLowerCase();
         if (body && phrases.some((p) => body.includes(p))) return false;
       }
-      if (isEvent) {
-        const cat = categoryOf(mt);
+      if (isEvent || isCheer) {
+        // Deliberately not gated on cheerDisplay: the Bits & Super Chats toggle doing
+        // nothing for Twitch cheers was a plain bug, and "hiding bits only works if you
+        // also display them as cards" would be indefensible. Display mode is rendering
+        // only.
+        const cat = isEvent ? categoryOf(mt) : 'cheer';
         if (style.hiddenEvents?.includes(cat)) return false;
         // Per-platform hide: e.g. 'tiktok:follow' hides follows on TikTok only.
         const prov = m.provider ?? 'twitch';
@@ -1235,6 +1322,11 @@ export const OverlayChat = ({ messages, style: rawStyle, superSample = 1 }: { me
     fontFamily: style.fontFamily,
     fontSize: `${fontPx}px`,
     color: style.bodyTextColor,
+    // Set once here so both reach messages, event cards, reply context, timestamps and
+    // the source tag. The bits that must stay bold (names, labels) set their own weight.
+    // The giant emote block is flex, so it ignores textAlign and keeps its own control.
+    textAlign: style.textAlign ?? 'left',
+    fontWeight: style.fontWeight ?? 400,
     display: 'flex',
     flexDirection: 'column',
     justifyContent: style.direction === 'newBottom' ? 'flex-end' : 'flex-start',

@@ -25,8 +25,12 @@ import {
   EVENT_CATEGORIES,
   FONT_OPTIONS,
   OVERLAY_ANIMATIONS,
+  CHEER_DISPLAYS,
+  GIANT_EMOTE_ALIGNS,
   OVERLAY_ENTRANCES,
   OVERLAY_LIMITS,
+  OVERLAY_TEXT_ALIGNS,
+  OVERLAY_TEXT_WEIGHTS,
   PROVIDER_CATEGORY_LABELS,
   PROVIDER_EVENT_CATEGORIES,
   THIRD_PARTY_BADGE_PROVIDERS,
@@ -1115,10 +1119,29 @@ const OverlaySettings = () => {
           <SettingsRow title="Message spacing" description="Gap between messages.">
             <Slider value={style.messageGap} min={OVERLAY_LIMITS.messageGap.min} max={OVERLAY_LIMITS.messageGap.max} onChange={(v) => set('messageGap', v)} format={(v) => `${v}px`} />
           </SettingsRow>
+          <SettingsRow title="Justify text" description="Line messages up on the left, down the middle, or on the right. Events follow too.">
+            <SegmentedSelect value={style.textAlign ?? 'left'} onChange={(v) => set('textAlign', v)} options={OVERLAY_TEXT_ALIGNS} />
+          </SettingsRow>
+          <SettingsRow title="Text weight" description="How heavy the text is. Usernames stay bold either way.">
+            <SegmentedSelect value={String(style.fontWeight ?? 400)} onChange={(v) => set('fontWeight', parseInt(v, 10))} options={OVERLAY_TEXT_WEIGHTS} />
+          </SettingsRow>
+          <SettingsRow title="Italic" description="Slant message text. Actions (/me) are italic either way." control={<Toggle enabled={style.textItalic === true} onChange={() => set('textItalic', style.textItalic !== true)} />} />
+          <SettingsRow title="Strikethrough" description="Draw a line through message text." control={<Toggle enabled={style.textStrikethrough === true} onChange={() => set('textStrikethrough', style.textStrikethrough !== true)} />} />
           <SettingsRow title="Text color" control={
             <input type="color" value={style.bodyTextColor} onChange={(e) => set('bodyTextColor', e.target.value)} className="h-7 w-10 rounded cursor-pointer bg-transparent border border-borderSubtle" />
           } />
-          <SettingsRow title="Text shadow" description="Dark outline behind text so it stays readable over any scene." control={<Toggle enabled={style.textShadow} onChange={() => set('textShadow', !style.textShadow)} />} />
+          <SettingsRow title="Text shadow" description="An outline behind text so it stays readable over any scene." control={<Toggle enabled={style.textShadow} onChange={() => set('textShadow', !style.textShadow)} />} />
+          <SettingsSubGroup>
+            <SettingsRow title="Shadow color" disabled={!style.textShadow} control={
+              <input type="color" value={style.textShadowColor || '#000000'} onChange={(e) => set('textShadowColor', e.target.value)} disabled={!style.textShadow} className="h-7 w-10 rounded cursor-pointer bg-transparent border border-borderSubtle disabled:cursor-not-allowed" />
+            } />
+            <SettingsRow title="Shadow size" description="How far the shadow spreads. 0 turns it off." disabled={!style.textShadow}>
+              <Slider value={style.textShadowSize ?? 2} min={OVERLAY_LIMITS.textShadowSize.min} max={OVERLAY_LIMITS.textShadowSize.max} step={0.5} onChange={(v) => set('textShadowSize', v)} format={(v) => `${v}px`} />
+            </SettingsRow>
+            <SettingsRow title="Shadow strength" description="How solid the shadow is." disabled={!style.textShadow}>
+              <Slider value={style.textShadowOpacity ?? 0.85} min={OVERLAY_LIMITS.textShadowOpacity.min} max={OVERLAY_LIMITS.textShadowOpacity.max} step={0.05} onChange={(v) => set('textShadowOpacity', v)} format={(v) => `${Math.round(v * 100)}%`} />
+            </SettingsRow>
+          </SettingsSubGroup>
           <SettingsRow title="Emoji style" description="Render every platform's emoji in one consistent style. System uses your machine's emoji font." control={<Dropdown value={style.emojiStyle} options={emojiStyleOptions} onChange={(v) => set('emojiStyle', v)} align="right" />} />
         </SettingsSection>
         )}
@@ -1130,6 +1153,11 @@ const OverlaySettings = () => {
             <Slider value={style.emoteScale} min={OVERLAY_LIMITS.emoteScale.min} max={OVERLAY_LIMITS.emoteScale.max} step={0.05} onChange={(v) => set('emoteScale', v)} format={(v) => `${v.toFixed(2)}x`} />
           </SettingsRow>
           <SettingsRow title="Giant emotes" description={'Render the last emote of a "Gigantify an Emote" power-up message at 4x below the message, like Twitch does.'} control={<Toggle enabled={style.giantEmotes !== false} onChange={() => set('giantEmotes', style.giantEmotes === false)} />} />
+          <SettingsSubGroup>
+            <SettingsRow title="Giant emote placement" description="Left, centered, or right on its own line below the message — or Inline to leave it where it was typed, so an emote-only message shows it right after the name." disabled={style.giantEmotes === false}>
+              <SegmentedSelect value={style.giantEmoteAlign ?? 'center'} onChange={(v) => set('giantEmoteAlign', v)} options={GIANT_EMOTE_ALIGNS} />
+            </SettingsRow>
+          </SettingsSubGroup>
           <SettingsRow title="Show badges" control={<Toggle enabled={style.showBadges} onChange={() => set('showBadges', !style.showBadges)} />} />
           <SettingsRow title="Badge size" disabled={!style.showBadges}>
             <Slider value={style.badgeScale} min={OVERLAY_LIMITS.badgeScale.min} max={OVERLAY_LIMITS.badgeScale.max} step={0.05} onChange={(v) => set('badgeScale', v)} format={(v) => `${v.toFixed(2)}x`} />
@@ -1297,6 +1325,9 @@ const OverlaySettings = () => {
 
         {activeTab === 'events' && (
         <SettingsSection label="Events" description="Subs, gifts, raids, and more. How they look, and which ones each source shows.">
+          <SettingsRow title="Bits messages" titleBadge={<SourceScope sources={['twitch']} />} description="Show a cheer inline like a normal message, or as an event card like subs and raids.">
+            <SegmentedSelect value={style.cheerDisplay ?? 'message'} onChange={(v) => set('cheerDisplay', v)} options={CHEER_DISPLAYS} />
+          </SettingsRow>
           <SettingsRow title="Event style" description="Every style shows the sender's badges and paint name. Plain keeps a subtle per-platform tint, Outline draws a thin ring in the platform's color, StreamNook adds our signature multi-color gradient wash.">
             <SegmentedSelect
               value={style.eventStyle}
