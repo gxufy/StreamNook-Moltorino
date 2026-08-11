@@ -97,11 +97,28 @@ pub const fn app_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
-/// Whether the in-app self-updater is active. Disabled in beta so the beta
-/// never contacts the production update endpoint, downloads a production
-/// artifact, or overwrites the production `StreamNook.exe`.
+/// Update source identity for this build. Source selection belongs here so a
+/// fork build can never silently drift onto the upstream production channel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateChannel {
+    UpstreamProduction,
+    ForkBeta,
+}
+
+#[cfg(feature = "beta-build")]
+pub const fn update_channel() -> UpdateChannel {
+    UpdateChannel::ForkBeta
+}
+
+#[cfg(not(feature = "beta-build"))]
+pub const fn update_channel() -> UpdateChannel {
+    UpdateChannel::UpstreamProduction
+}
+
+/// Whether the in-app self-updater is active. ForkBeta stays disabled until its
+/// dedicated gxufy-only release feed exists; it must never borrow upstream.
 pub const fn updater_enabled() -> bool {
-    !is_beta_build()
+    matches!(update_channel(), UpdateChannel::UpstreamProduction)
 }
 
 /// Namespaces a keyring *service* name so beta credentials can never collide
@@ -124,8 +141,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn updater_disabled_exactly_when_beta() {
-        assert_eq!(updater_enabled(), !is_beta_build());
+    fn update_channel_matches_build_mode() {
+        if is_beta_build() {
+            assert_eq!(update_channel(), UpdateChannel::ForkBeta);
+        } else {
+            assert_eq!(update_channel(), UpdateChannel::UpstreamProduction);
+        }
+    }
+
+    #[test]
+    fn updater_policy_matches_channel() {
+        assert_eq!(
+            updater_enabled(),
+            update_channel() == UpdateChannel::UpstreamProduction
+        );
+        if update_channel() == UpdateChannel::ForkBeta {
+            assert!(
+                !updater_enabled(),
+                "ForkBeta must remain disabled in Phase 3B"
+            );
+        }
     }
 
     #[test]
