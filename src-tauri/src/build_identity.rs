@@ -158,7 +158,7 @@ mod tests {
         if update_channel() == UpdateChannel::ForkBeta {
             assert!(
                 !updater_enabled(),
-                "ForkBeta must remain disabled in Phase 3B"
+                "ForkBeta must remain disabled until its feed is published and verified"
             );
         }
     }

@@ -165,9 +165,14 @@ const FORK_UPDATE_IDENTITY: &str = "gxufy-streamnook-moltorino";
 const FORK_UPDATE_CHANNEL: &str = "beta";
 const FORK_UPDATE_PLATFORM: &str = "windows-x64";
 const UPDATE_BUNDLE_NAME: &str = "StreamNook.7z";
+/// A dedicated moving release tag avoids GitHub's `/releases/latest` behavior,
+/// which excludes prereleases. Phase 3C-2 will replace this release's manifest
+/// asset after publishing each versioned beta bundle.
+const FORK_BETA_MANIFEST_URL: &str =
+    "https://github.com/gxufy/StreamNook-Moltorino/releases/download/beta-feed/update-beta.json";
 
-/// Strict future contract for the gxufy beta feed. Phase 3B validates and
-/// converts this format only; ForkBeta discovery remains network-disabled.
+/// Strict contract for the gxufy beta feed. ForkBeta discovery remains behind
+/// the disabled readiness gate during Phase 3C-1.
 #[derive(Debug, serde::Deserialize)]
 #[allow(dead_code)]
 struct ForkUpdateManifest {
@@ -284,6 +289,45 @@ fn fork_version_is_newer(remote: &str, current: &str) -> bool {
     }
 }
 
+/// Fetch the dedicated gxufy beta feed and apply the strict fork contract.
+/// Errors are returned directly: ForkBeta has no production or alternate-feed
+/// fallback. The active dispatcher does not call this until the readiness gate
+/// is enabled in a later phase.
+#[allow(dead_code)]
+async fn check_for_bundle_update_fork_beta() -> Result<BundleUpdateStatus, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("StreamNook-Moltorino-Beta")
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            let target = attempt.url();
+            let github_asset_host = matches!(
+                target.host_str(),
+                Some("github.com")
+                    | Some("objects.githubusercontent.com")
+                    | Some("release-assets.githubusercontent.com")
+            );
+            if attempt.previous().len() < 5 && target.scheme() == "https" && github_asset_host {
+                attempt.follow()
+            } else {
+                attempt.stop()
+            }
+        }))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let manifest_text = client
+        .get(FORK_BETA_MANIFEST_URL)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch ForkBeta update manifest: {e}"))?
+        .error_for_status()
+        .map_err(|e| format!("ForkBeta update manifest returned an error: {e}"))?
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read ForkBeta update manifest: {e}"))?;
+
+    parse_fork_update_manifest(&manifest_text, &get_current_app_version())
+}
+
 /// Check for updates via the self-hosted streamnook.app manifest (primary path).
 async fn check_for_bundle_update_streamnook() -> Result<BundleUpdateStatus, String> {
     let client = reqwest::Client::builder()
@@ -353,8 +397,8 @@ pub async fn check_for_bundle_update() -> Result<BundleUpdateStatus, String> {
                 }
             }
         }
-        // Phase 3B intentionally has no ForkBeta discovery function. Return a
-        // local status without constructing a client or touching production.
+        // The gxufy-only client exists for direct testing, but the Phase 3C-1
+        // readiness gate stays off. Do not call it or construct an HTTP client.
         crate::build_identity::UpdateChannel::ForkBeta => Ok(disabled_update_status()),
     }
 }
@@ -935,6 +979,24 @@ mod tests {
         let invalid_remote = manifest_with(&[("8.4.0-beta.3", "not-a-version")]);
         assert!(parse_fork_update_manifest(&invalid_remote, "8.4.0-beta.2").is_err());
         assert!(parse_fork_update_manifest(VALID_FORK_MANIFEST, "not-a-version").is_err());
+    }
+
+    #[test]
+    fn malformed_fork_manifest_fails_closed() {
+        for json in ["", "not json", "{}"] {
+            assert!(parse_fork_update_manifest(json, "8.4.0-beta.2").is_err());
+        }
+    }
+
+    #[test]
+    fn fork_feed_is_fixed_and_has_no_fallback_source() {
+        assert_eq!(
+            FORK_BETA_MANIFEST_URL,
+            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/beta-feed/update-beta.json"
+        );
+        assert!(!FORK_BETA_MANIFEST_URL.contains("streamnook.app"));
+        assert!(!FORK_BETA_MANIFEST_URL.contains("winters27"));
+        assert!(!FORK_BETA_MANIFEST_URL.contains("/releases/latest/"));
     }
 
     #[test]
