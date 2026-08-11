@@ -22,6 +22,18 @@ type StreamStartResult = {
   proxy_region?: string;
   /** Quality menu the resolver discovered (variant names + best/worst). */
   available?: string[];
+  /** Clips only: where this clip sits inside its source broadcast, so chat replay can
+   *  address the right comments. Playback never uses it. */
+  clip_source?: ClipSource;
+};
+
+/** Chat-replay coordinates for a clip. Every field is optional: a clip whose parent VOD
+ *  has expired still plays, it just has no chat to show. */
+export type ClipSource = {
+  video_id?: string;
+  vod_offset?: number;
+  duration?: number;
+  broadcaster_login?: string;
 };
 
 /** The current stream's ad source, surfaced as an unobtrusive note in the player. */
@@ -82,6 +94,29 @@ export interface MediaInfo {
   game_id?: string;
   game_name?: string;
   language?: string;
+  /** Clips only: the source broadcast and the window inside it, used to address chat
+   *  replay. Grouped rather than spread as loose fields because `duration` would collide
+   *  with TwitchVideo's, which is a formatted string ("1h23m45s") not seconds. Present
+   *  when the clip came from a grid; the resolver supplies it for a clip opened from a
+   *  link. Absent when the parent VOD has expired. */
+  clip_source?: ClipSource;
+}
+
+/** Pull the chat-replay coordinates off a clip. Returns undefined when the clip has no
+ *  usable source, which is normal once the parent broadcast has expired. */
+export function clipSourceOf(clip: {
+  video_id?: string;
+  vod_offset?: number;
+  duration?: number;
+  broadcaster_login?: string;
+}): ClipSource | undefined {
+  if (!clip.video_id || clip.vod_offset == null) return undefined;
+  return {
+    video_id: clip.video_id,
+    vod_offset: clip.vod_offset,
+    duration: clip.duration,
+    broadcaster_login: clip.broadcaster_login,
+  };
 }
 
 // Types for drops data - matches backend DropCampaign struct
@@ -1329,11 +1364,24 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       const result = await invoke<StreamStartResult>('start_stream', { url: url, quality: settings.quality });
       logQualityFallback(settings.quality, result.quality);
+      // A clip replays the chat from the moment it was cut. The resolver looks the
+      // coordinates up for ANY clip, so prefer its answer over whatever the caller
+      // happened to carry, and fall back to the caller for paths that pre-resolved.
+      const clipSource = type === 'clip' ? (result.clip_source ?? info.clip_source) : undefined;
+      const canClipReplay = !!clipSource?.video_id && clipSource?.vod_offset != null;
+
       // VODs carry their owner login (TwitchVideo.user_login). Binding it lets
       // the chat panel offer replay + a live-chat toggle. The live IRC connect
       // stays gated behind the replay/live toggle in ChatWidget, so setting a
-      // login here does NOT auto-join live chat. Clips leave it blank.
-      const vodOwnerLogin = type === 'video' ? (info.user_login || '').toLowerCase() : '';
+      // login here does NOT auto-join live chat. A clip only binds one when it can
+      // actually replay: binding it otherwise would make the connect effect join the
+      // channel's LIVE chat during a clip, which nobody asked for.
+      const vodOwnerLogin =
+        type === 'video'
+          ? (info.user_login || '').toLowerCase()
+          : canClipReplay
+            ? (clipSource?.broadcaster_login || '').toLowerCase()
+            : '';
       const parsedInfo: TwitchStream = {
         id: info.id || '',
         user_id: info.broadcaster_id || info.user_id || '',
@@ -1343,6 +1391,10 @@ export const useAppStore = create<AppState>((set, get) => ({
         viewer_count: info.view_count || 0,
         game_name: type === 'clip' ? 'Twitch Clip' : 'Twitch Video',
         thumbnail_url: info.thumbnail_url || '',
+        // Filled in by the lookup below. Neither TwitchVideo nor TwitchClip carries the
+        // broadcaster's avatar, and leaving it blank is why a VOD or clip showed no
+        // profile picture while a live stream (which gets it from the stream payload)
+        // always did.
         profile_image_url: '',
         started_at: info.created_at || new Date().toISOString(),
       };
@@ -1360,6 +1412,29 @@ export const useAppStore = create<AppState>((set, get) => ({
         streamOriginCategory: get().homeSelectedCategory || null,
       });
 
+      // Resolve the broadcaster's avatar and patch it in. Fire-and-forget: playback and
+      // chat must never wait on it, and a failure just leaves the picture blank as
+      // before. Guarded on the session still being the same media, so a fast
+      // clip-to-clip switch can't stamp the previous streamer's avatar.
+      const avatarKey = parsedInfo.user_id || vodOwnerLogin;
+      if (avatarKey && !parsedInfo.profile_image_url) {
+        const wantUrl = url;
+        void (async () => {
+          try {
+            const who = parsedInfo.user_id
+              ? await invoke<{ profile_image_url?: string }>('get_user_by_id', { userId: parsedInfo.user_id })
+              : await invoke<{ profile_image_url?: string }>('get_user_by_login', { login: vodOwnerLogin });
+            const img = who?.profile_image_url;
+            if (!img) return;
+            const s = get();
+            if (s.originalMediaUrl !== wantUrl || !s.currentStream) return;
+            set({ currentStream: { ...s.currentStream, profile_image_url: img } });
+          } catch {
+            /* no avatar is not worth surfacing */
+          }
+        })();
+      }
+
       // Start synced chat replay for VODs. The vod id comes from the url
       // (/videos/<id>); the owner login keys the channel's emote set. Replay is
       // read-only and drives the chat panel until the user toggles to live.
@@ -1371,6 +1446,16 @@ export const useAppStore = create<AppState>((set, get) => ({
             .then((m) => m.beginVodReplay(vodId, login))
             .catch((e) => Logger.warn('[playMedia] could not start VOD replay:', e));
         }
+      } else if (canClipReplay && clipSource) {
+        // The clip plays its own MP4 as always; the source VOD is only the address
+        // for the comments. clipReplayWindow bounds the fetch to the clip's own span.
+        const vodOffset = clipSource.vod_offset ?? 0;
+        const duration = clipSource.duration;
+        const videoId = clipSource.video_id as string;
+        const login = vodOwnerLogin;
+        import('./vodReplayStore')
+          .then((m) => m.beginVodReplay(videoId, login, m.clipReplayWindow(vodOffset, duration)))
+          .catch((e) => Logger.warn('[playMedia] could not start clip chat replay:', e));
       }
 
     } catch (e: unknown) {
