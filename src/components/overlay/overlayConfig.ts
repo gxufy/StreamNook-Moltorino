@@ -206,6 +206,9 @@ export interface OverlayStyle {
   /** Restore the last on-screen messages after an OBS/browser source reload.
    *  Off (default) = the overlay comes back cleared on reload / stream start. */
   restoreOnReload: boolean;
+  /** Render the last emote of a "Gigantify an Emote" power-up message at 4x
+   *  below the message, like Twitch does. Off shows it inline at normal size. */
+  giantEmotes: boolean;
 }
 
 // Which event categories each platform can actually emit — drives the per-platform
@@ -216,6 +219,15 @@ export const PROVIDER_EVENT_CATEGORIES: Partial<Record<ProviderId, EventCategory
   kick: ['subscription', 'gift', 'follow', 'raid'],
   youtube: ['subscription', 'gift', 'cheer'],
   tiktok: ['gift', 'cheer', 'follow'],
+};
+
+// A category's name on a SPECIFIC platform, where the generic label would name
+// another platform's feature: the money category is Bits on Twitch, Super Chats
+// on YouTube, coins on TikTok. Fall back to EVENT_CATEGORIES for the rest.
+export const PROVIDER_CATEGORY_LABELS: Partial<Record<ProviderId, Partial<Record<EventCategory, string>>>> = {
+  twitch: { cheer: 'Bits' },
+  youtube: { cheer: 'Super Chats' },
+  tiktok: { cheer: 'Coins' },
 };
 
 // Badge providers the overlay resolves, each independently toggleable under the
@@ -311,6 +323,7 @@ export const DEFAULT_OVERLAY_STYLE: OverlayStyle = {
   direction: 'newBottom',
   entrance: 'fade',
   restoreOnReload: false,
+  giantEmotes: true,
 };
 
 // Clamp ranges so a builder (or a hand-edited saved config) can't produce a
@@ -403,5 +416,7 @@ export const clampOverlayStyle = (s: OverlayStyle): OverlayStyle => {
     emoteScale: clamp(s.emoteScale, OVERLAY_LIMITS.emoteScale.min, OVERLAY_LIMITS.emoteScale.max),
     badgeScale: clamp(s.badgeScale, OVERLAY_LIMITS.badgeScale.min, OVERLAY_LIMITS.badgeScale.max),
     backgroundOpacity: clamp(s.backgroundOpacity, OVERLAY_LIMITS.backgroundOpacity.min, OVERLAY_LIMITS.backgroundOpacity.max),
+    // Absent on configs saved before the field existed → on (the Twitch-faithful default).
+    giantEmotes: s.giantEmotes !== false,
   };
 };

@@ -36,6 +36,12 @@ static MESSAGE_BROADCASTER: OnceLock<Mutex<Option<Arc<broadcast::Sender<String>>
     OnceLock::new();
 static MESSAGE_QUEUE: OnceLock<Mutex<VecDeque<String>>> = OnceLock::new();
 static IRC_HANDLE: OnceLock<Mutex<Option<tokio::task::JoinHandle<()>>>> = OnceLock::new();
+// Abort handles for the keepalive tasks spawned INSIDE the IRC task (ping +
+// frontend heartbeat). Aborting IRC_HANDLE alone orphans them: the ping task's
+// writer Arc keeps the socket's write half alive, so it would keep PINGing a
+// half-open connection indefinitely after stop().
+static IRC_PING_ABORT: OnceLock<Mutex<Option<tokio::task::AbortHandle>>> = OnceLock::new();
+static IRC_HEARTBEAT_ABORT: OnceLock<Mutex<Option<tokio::task::AbortHandle>>> = OnceLock::new();
 static IRC_WRITER: OnceLock<Mutex<Option<Arc<Mutex<tokio::io::WriteHalf<TcpStream>>>>>> =
     OnceLock::new();
 static SHARED_CHAT_ROOMS: OnceLock<Mutex<HashMap<String, Vec<String>>>> = OnceLock::new();
@@ -113,6 +119,24 @@ fn get_message_queue() -> &'static Mutex<VecDeque<String>> {
 
 fn get_irc_handle() -> &'static Mutex<Option<tokio::task::JoinHandle<()>>> {
     IRC_HANDLE.get_or_init(|| Mutex::new(None))
+}
+
+fn get_irc_ping_abort() -> &'static Mutex<Option<tokio::task::AbortHandle>> {
+    IRC_PING_ABORT.get_or_init(|| Mutex::new(None))
+}
+
+fn get_irc_heartbeat_abort() -> &'static Mutex<Option<tokio::task::AbortHandle>> {
+    IRC_HEARTBEAT_ABORT.get_or_init(|| Mutex::new(None))
+}
+
+/// Abort the ping + heartbeat keepalive tasks, if running. Idempotent.
+async fn abort_keepalive_tasks() {
+    if let Some(h) = get_irc_ping_abort().lock().await.take() {
+        h.abort();
+    }
+    if let Some(h) = get_irc_heartbeat_abort().lock().await.take() {
+        h.abort();
+    }
 }
 
 fn get_irc_writer() -> &'static Mutex<Option<Arc<Mutex<tokio::io::WriteHalf<TcpStream>>>>> {
@@ -555,6 +579,13 @@ impl IrcService {
                     }
                 }
             });
+
+            // Register the keepalive tasks so stop()/stop_irc_only() can abort
+            // them; aborting only the parent IRC task leaves them orphaned
+            // (tokio::spawn children are independent of their parent). Any
+            // previous iteration's handles are already aborted below.
+            *get_irc_ping_abort().lock().await = Some(ping_handle.abort_handle());
+            *get_irc_heartbeat_abort().lock().await = Some(heartbeat_handle.abort_handle());
 
             // Listen for messages
             loop {
@@ -2647,10 +2678,12 @@ impl IrcService {
     pub async fn stop() -> Result<()> {
         debug!("[IRC Chat] Stopping chat service");
 
-        // Stop IRC connection
+        // Stop IRC connection + its keepalive children (ping / heartbeat),
+        // which aborting the parent alone would orphan.
         if let Some(handle) = get_irc_handle().lock().await.take() {
             handle.abort();
         }
+        abort_keepalive_tasks().await;
 
         // Clear IRC writer
         *get_irc_writer().lock().await = None;
@@ -2698,6 +2731,7 @@ impl IrcService {
         if let Some(handle) = get_irc_handle().lock().await.take() {
             handle.abort();
         }
+        abort_keepalive_tasks().await;
         *get_irc_writer().lock().await = None;
         get_current_channels().lock().await.clear();
         get_shared_chat_rooms().lock().await.clear();
