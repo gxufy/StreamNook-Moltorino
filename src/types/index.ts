@@ -773,6 +773,7 @@ export interface Settings {
   chat_overlay_order?: ChatOverlayOrder;
   show_channel_point_redemptions?: boolean; // Show no-input channel-point redemptions as chat rows (default on)
   collapse_gift_subs?: boolean; // Collapse mass gift-sub bombs into one announcement row with recipients (default on)
+  clip_chat_replay?: boolean; // Show the chat that was live during a clip, beside it in the clip player (default on)
   chat_logging?: ChatLoggingSettings; // Save chat to plain text files as you watch
   moderation?: ModerationSettings;
   keybindings?: KeybindingOverrides; // Customizable keyboard shortcut overrides (id -> chords)
@@ -893,6 +894,10 @@ export interface TwitchClip {
   embed_url: string;
   broadcaster_id: string;
   broadcaster_name: string;
+  /** Broadcaster LOGIN (lowercase), distinct from the display name. Chat replay keys a
+   *  channel's third-party emote set off the login. Absent on the Helix clip path, which
+   *  only carries the display name; resolve it from broadcaster_id there. */
+  broadcaster_login?: string;
   creator_id: string;
   creator_name: string;
   video_id: string;
