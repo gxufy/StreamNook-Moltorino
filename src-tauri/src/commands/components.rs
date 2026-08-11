@@ -171,10 +171,8 @@ const UPDATE_BUNDLE_NAME: &str = "StreamNook.7z";
 const FORK_BETA_MANIFEST_URL: &str =
     "https://github.com/gxufy/StreamNook-Moltorino/releases/download/beta-feed/update-beta.json";
 
-/// Strict contract for the gxufy beta feed. ForkBeta discovery remains behind
-/// the disabled readiness gate during Phase 3C-1.
+/// Strict contract for the gxufy beta feed.
 #[derive(Debug, serde::Deserialize)]
-#[allow(dead_code)]
 struct ForkUpdateManifest {
     identity: String,
     channel: String,
@@ -187,7 +185,6 @@ struct ForkUpdateManifest {
     notes: String,
 }
 
-#[allow(dead_code)]
 fn parse_fork_update_manifest(
     json: &str,
     current_version: &str,
@@ -197,7 +194,6 @@ fn parse_fork_update_manifest(
     validate_fork_update_manifest(manifest, current_version)
 }
 
-#[allow(dead_code)]
 fn validate_fork_update_manifest(
     manifest: ForkUpdateManifest,
     current_version: &str,
@@ -245,7 +241,6 @@ fn validate_fork_update_manifest(
     })
 }
 
-#[allow(dead_code)]
 fn validate_fork_download_url(download_url: &str, version: &str) -> Result<(), String> {
     let url = url::Url::parse(download_url)
         .map_err(|e| format!("Invalid fork update download URL: {e}"))?;
@@ -280,7 +275,6 @@ fn validate_fork_download_url(download_url: &str, version: &str) -> Result<(), S
     Ok(())
 }
 
-#[allow(dead_code)]
 fn fork_version_is_newer(remote: &str, current: &str) -> bool {
     let parse = |value: &str| semver::Version::parse(value.trim().trim_start_matches('v'));
     match (parse(remote), parse(current)) {
@@ -291,9 +285,7 @@ fn fork_version_is_newer(remote: &str, current: &str) -> bool {
 
 /// Fetch the dedicated gxufy beta feed and apply the strict fork contract.
 /// Errors are returned directly: ForkBeta has no production or alternate-feed
-/// fallback. The active dispatcher does not call this until the readiness gate
-/// is enabled in a later phase.
-#[allow(dead_code)]
+/// fallback.
 async fn check_for_bundle_update_fork_beta() -> Result<BundleUpdateStatus, String> {
     let client = reqwest::Client::builder()
         .user_agent("StreamNook-Moltorino-Beta")
@@ -382,13 +374,28 @@ async fn check_for_bundle_update_streamnook() -> Result<BundleUpdateStatus, Stri
     })
 }
 
-/// Check for bundle updates. Tries the self-hosted manifest first and falls back
-/// to the GitHub release path if streamnook.app is unreachable, so a website
-/// outage never blocks updates.
-#[tauri::command]
-pub async fn check_for_bundle_update() -> Result<BundleUpdateStatus, String> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UpdateDiscoveryPolicy {
+    UpstreamProduction,
+    ForkBeta,
+}
+
+fn update_discovery_policy() -> UpdateDiscoveryPolicy {
     match crate::build_identity::update_channel() {
         crate::build_identity::UpdateChannel::UpstreamProduction => {
+            UpdateDiscoveryPolicy::UpstreamProduction
+        }
+        crate::build_identity::UpdateChannel::ForkBeta => UpdateDiscoveryPolicy::ForkBeta,
+    }
+}
+
+/// Check for bundle updates. Production tries the self-hosted manifest first and
+/// falls back to the upstream GitHub release. ForkBeta uses only the gxufy feed
+/// and returns its errors directly.
+#[tauri::command]
+pub async fn check_for_bundle_update() -> Result<BundleUpdateStatus, String> {
+    match update_discovery_policy() {
+        UpdateDiscoveryPolicy::UpstreamProduction => {
             match check_for_bundle_update_streamnook().await {
                 Ok(status) => Ok(status),
                 Err(e) => {
@@ -397,24 +404,7 @@ pub async fn check_for_bundle_update() -> Result<BundleUpdateStatus, String> {
                 }
             }
         }
-        // The gxufy-only client exists for direct testing, but the Phase 3C-1
-        // readiness gate stays off. Do not call it or construct an HTTP client.
-        crate::build_identity::UpdateChannel::ForkBeta => Ok(disabled_update_status()),
-    }
-}
-
-fn disabled_update_status() -> BundleUpdateStatus {
-    let current_version = get_current_app_version();
-    BundleUpdateStatus {
-        update_available: false,
-        current_version: current_version.clone(),
-        latest_version: current_version,
-        download_url: None,
-        bundle_name: None,
-        download_size: None,
-        component_changes: None,
-        release_notes: None,
-        sha256: None,
+        UpdateDiscoveryPolicy::ForkBeta => check_for_bundle_update_fork_beta().await,
     }
 }
 
@@ -1000,25 +990,22 @@ mod tests {
     }
 
     #[test]
-    fn production_channel_retains_upstream_discovery_policy() {
-        if crate::build_identity::update_channel()
-            == crate::build_identity::UpdateChannel::UpstreamProduction
-        {
-            assert!(crate::build_identity::updater_enabled());
-            assert_eq!(UPDATE_MANIFEST_URL, "https://streamnook.app/api/v1/update");
-        }
-    }
-
-    #[test]
-    fn fork_beta_disabled_status_has_no_source_or_checksum() {
-        if crate::build_identity::update_channel() == crate::build_identity::UpdateChannel::ForkBeta
-        {
-            assert!(!crate::build_identity::updater_enabled());
-            let status = disabled_update_status();
-            assert!(!status.update_available);
-            assert!(status.download_url.is_none());
-            assert!(status.bundle_name.is_none());
-            assert!(status.sha256.is_none());
+    fn active_channel_selects_its_dedicated_discovery_policy() {
+        assert!(crate::build_identity::updater_enabled());
+        match crate::build_identity::update_channel() {
+            crate::build_identity::UpdateChannel::UpstreamProduction => {
+                assert_eq!(
+                    update_discovery_policy(),
+                    UpdateDiscoveryPolicy::UpstreamProduction
+                );
+                assert_eq!(UPDATE_MANIFEST_URL, "https://streamnook.app/api/v1/update");
+            }
+            crate::build_identity::UpdateChannel::ForkBeta => {
+                assert_eq!(update_discovery_policy(), UpdateDiscoveryPolicy::ForkBeta);
+                assert!(FORK_BETA_MANIFEST_URL.contains("github.com/gxufy/"));
+                assert!(!FORK_BETA_MANIFEST_URL.contains("streamnook.app"));
+                assert!(!FORK_BETA_MANIFEST_URL.contains("winters27"));
+            }
         }
     }
 }

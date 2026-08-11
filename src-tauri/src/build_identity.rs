@@ -115,10 +115,13 @@ pub const fn update_channel() -> UpdateChannel {
     UpdateChannel::UpstreamProduction
 }
 
-/// Whether the in-app self-updater is active. ForkBeta stays disabled until its
-/// dedicated gxufy-only release feed exists; it must never borrow upstream.
+/// Whether the in-app self-updater is active. Both defined channels have
+/// dedicated discovery sources; ForkBeta must never borrow upstream.
 pub const fn updater_enabled() -> bool {
-    matches!(update_channel(), UpdateChannel::UpstreamProduction)
+    matches!(
+        update_channel(),
+        UpdateChannel::UpstreamProduction | UpdateChannel::ForkBeta
+    )
 }
 
 /// Namespaces a keyring *service* name so beta credentials can never collide
@@ -150,17 +153,11 @@ mod tests {
     }
 
     #[test]
-    fn updater_policy_matches_channel() {
-        assert_eq!(
+    fn updater_is_enabled_for_each_dedicated_channel() {
+        assert!(
             updater_enabled(),
-            update_channel() == UpdateChannel::UpstreamProduction
+            "each build channel has a dedicated update source"
         );
-        if update_channel() == UpdateChannel::ForkBeta {
-            assert!(
-                !updater_enabled(),
-                "ForkBeta must remain disabled until its feed is published and verified"
-            );
-        }
     }
 
     #[test]
