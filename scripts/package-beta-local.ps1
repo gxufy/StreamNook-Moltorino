@@ -1,251 +1,204 @@
 <#
 .SYNOPSIS
-  Local-only beta packaging prototype for StreamNook + bundled Moltorino runtime.
+  Build a local-only StreamNook beta with a staged Bluzyrino chat runtime.
 
 .DESCRIPTION
-  Verifies and stages a pinned Moltorino runtime ZIP, builds an NSIS beta
-  installer via the beta Tauri config, assembles a portable ZIP, and generates
-  checksums. LOCAL TESTING ONLY -- the runtime ZIP still carries
-  NOTICE-INCOMPLETE.txt and is not approved for public distribution.
+  Validates a pinned, externally staged Bluzyrino runtime and its generated
+  manifest, stages it as chat-runtime\ for Tauri, builds an isolated NSIS beta,
+  assembles a portable ZIP, and generates local checksums.
 
-  Nothing here uploads, publishes, tags, or commits.
+  LOCAL TESTING ONLY. Nothing here uploads, publishes, tags, or commits.
 
 .NOTES
   Written for Windows PowerShell 5.1 compatibility.
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [string] $RuntimeZip,
-
-    [Parameter(Mandatory = $true)]
-    [string] $RuntimeSha256,
-
-    [string] $BetaVersion = "8.4.0-beta.1",
-
+    [string] $RuntimeRoot = "C:\Dev\Bluzyrino_staged",
+    [string] $BetaVersion = "8.4.0-beta.2",
     [string] $OutputRoot = "C:\Dev\StreamNook-Beta-Staging\app-output"
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-# --- constants ---------------------------------------------------------------
-$RepoRoot     = Split-Path -Parent $PSScriptRoot          # scripts\ -> repo root
-$SrcTauri     = Join-Path $RepoRoot "src-tauri"
-$StagingDir   = Join-Path $SrcTauri "target\beta-package-resources"
-$BetaConfig   = Join-Path $SrcTauri "tauri.beta.conf.json"
-$CargoBinName = "StreamNook"   # from [[bin]] name in Cargo.toml (NOT productName)
-$ExpectedExeSha = "4fa0ce90391bc4d4c9008af79c673b97559954d5b2941efe3cb5a5377c8dc2d1"
-$PortableName = "StreamNook-Moltorino-$BetaVersion-windows-x64"
+$RepoRoot       = Split-Path -Parent $PSScriptRoot
+$SrcTauri       = Join-Path $RepoRoot "src-tauri"
+$StagingDir     = Join-Path $SrcTauri "target\beta-package-resources"
+$BetaConfig     = Join-Path $SrcTauri "tauri.beta.conf.json"
+$CargoBinName   = "StreamNook"
+$RuntimeDirName = "chat-runtime"
+$RuntimeExeName = "Bluzyrino.exe"
+$ExpectedExeSha = "aa4b2101ffab24d271361d1b25c01026d8b61bfcda3e32b08d932262021af6ed"
+$PortableName   = "StreamNook-Moltorino-$BetaVersion-windows-x64"
 
-function Fail([string] $msg) {
-    Write-Host "FATAL: $msg" -ForegroundColor Red
+function Fail([string] $Message) {
+    Write-Host "FATAL: $Message" -ForegroundColor Red
     exit 1
 }
 
-function Section([string] $t) {
+function Section([string] $Title) {
     Write-Host ""
-    Write-Host "=== $t ===" -ForegroundColor Cyan
+    Write-Host "=== $Title ===" -ForegroundColor Cyan
 }
 
-function Get-Sha256([string] $path) {
-    return (Get-FileHash -Path $path -Algorithm SHA256).Hash.ToLower()
+function Get-Sha256([string] $Path) {
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
-# =============================================================================
-# A. Validate inputs
-# =============================================================================
-Section "A. Validate runtime ZIP"
-
-$zip = Resolve-Path -Path $RuntimeZip -ErrorAction SilentlyContinue
-if (-not $zip) { Fail "RuntimeZip not found: $RuntimeZip" }
-$zip = $zip.Path
-Write-Host "Runtime ZIP : $zip"
-
-$actualZipSha = Get-Sha256 $zip
-$expectedZipSha = $RuntimeSha256.ToLower()
-Write-Host "expected SHA: $expectedZipSha"
-Write-Host "actual   SHA: $actualZipSha"
-if ($actualZipSha -ne $expectedZipSha) {
-    Fail "Runtime ZIP SHA-256 mismatch. Refusing to extract."
-}
-Write-Host "ZIP hash verified." -ForegroundColor Green
-
-if (-not (Test-Path $BetaConfig)) { Fail "Beta config missing: $BetaConfig" }
-
-# Validate beta config CONTENT before building. Guards against filename/installer
-# drift: filenames derive from $BetaVersion, so the config version must match, and
-# the isolation-critical fields (identifier/productName/target/mode/resources)
-# must be exactly the beta values or the build could collide with production.
-$betaCfg = Get-Content -Raw -Path $BetaConfig | ConvertFrom-Json
-if ($betaCfg.version -ne $BetaVersion) {
-    Fail "Beta config version '$($betaCfg.version)' != BetaVersion parameter '$BetaVersion'."
-}
-if ($betaCfg.productName -ne "StreamNook Moltorino Beta") {
-    Fail "Beta config productName unexpected: '$($betaCfg.productName)'."
-}
-if ($betaCfg.identifier -ne "com.gxufy.streamnook-moltorino.beta") {
-    Fail "Beta config identifier unexpected: '$($betaCfg.identifier)'."
-}
-if ($betaCfg.bundle.active -ne $true) {
-    Fail "Beta config bundle.active must be true."
-}
-if (($betaCfg.bundle.targets -join ",") -ne "nsis") {
-    Fail "Beta config bundle.targets must be exactly [nsis]. Got: $($betaCfg.bundle.targets -join ',')"
-}
-if ($betaCfg.bundle.windows.nsis.installMode -ne "currentUser") {
-    Fail "Beta config NSIS installMode must be 'currentUser'. Got: '$($betaCfg.bundle.windows.nsis.installMode)'."
-}
-$resProp = $betaCfg.bundle.resources.PSObject.Properties['target/beta-package-resources/']
-if ($null -eq $resProp -or $resProp.Value -ne "") {
-    Fail "Beta config resource 'target/beta-package-resources/' must map to an empty destination."
-}
-Write-Host "Beta config validated: version=$($betaCfg.version) id=$($betaCfg.identifier) target=nsis mode=currentUser." -ForegroundColor Green
-
-# =============================================================================
-# B. Ignored staging only
-# =============================================================================
-Section "B. Reset staging directory (ignored)"
-
-# Guard: only ever touch the exact staging dir under src-tauri\target.
-$expectedStagingTail = "src-tauri\target\beta-package-resources"
-if ($StagingDir -notlike "*$expectedStagingTail") {
-    Fail "Staging path guard failed: $StagingDir"
-}
-if (Test-Path $StagingDir) {
-    Remove-Item -Path $StagingDir -Recurse -Force
-    Write-Host "Removed previous staging dir."
-}
-New-Item -ItemType Directory -Force -Path $StagingDir | Out-Null
-Write-Host "Staging dir : $StagingDir"
-
-# =============================================================================
-# C. Extract + structural verification
-# =============================================================================
-Section "C. Extract and verify structure"
-
-Expand-Archive -Path $zip -DestinationPath $StagingDir -Force
-
-$rootEntries = Get-ChildItem -Path $StagingDir | Select-Object -ExpandProperty Name | Sort-Object
-$expectedRoot = @("SOURCE.txt", "licenses", "moltorino", "runtime-manifest.json") | Sort-Object
-$rootJoined = ($rootEntries -join ", ")
-Write-Host "root entries: $rootJoined"
-if (($rootEntries -join "|") -ne ($expectedRoot -join "|")) {
-    Fail "Unexpected ZIP root entries. Got: $rootJoined"
+function Assert-SafeRelativePath([string] $RelativePath) {
+    if ([string]::IsNullOrWhiteSpace($RelativePath)) {
+        Fail "Manifest contains an empty path."
+    }
+    $normalized = $RelativePath.Replace("\", "/")
+    if ($normalized -ne $RelativePath) {
+        Fail "Manifest path must use forward slashes: $RelativePath"
+    }
+    if ([IO.Path]::IsPathRooted($RelativePath) -or $RelativePath.Contains(":")) {
+        Fail "Manifest path is rooted or contains a drive designator: $RelativePath"
+    }
+    $segments = $RelativePath.Split("/")
+    if ($segments -contains "" -or $segments -contains "." -or $segments -contains "..") {
+        Fail "Manifest path contains an unsafe segment: $RelativePath"
+    }
 }
 
-$mustExist = @(
-    "moltorino\Moltorino7.exe",
-    "moltorino\platforms\qwindows.dll",
-    "moltorino\imageformats\qwebp.dll"
+function Test-RuntimeManifest([string] $Root) {
+    $resolvedRoot = (Resolve-Path -LiteralPath $Root -ErrorAction SilentlyContinue)
+    if (-not $resolvedRoot) { Fail "RuntimeRoot not found: $Root" }
+    $resolvedRoot = $resolvedRoot.Path.TrimEnd("\")
+
+    $manifestPath = Join-Path $resolvedRoot "runtime-manifest.json"
+    $entrypoint = Join-Path $resolvedRoot $RuntimeExeName
+    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+        Fail "Runtime manifest missing: $manifestPath"
+    }
+    if (-not (Test-Path -LiteralPath $entrypoint -PathType Leaf)) {
+        Fail "Runtime entrypoint missing: $entrypoint"
+    }
+
+    $manifest = Get-Content -Raw -LiteralPath $manifestPath | ConvertFrom-Json
+    if ($manifest.runtime_id -ne "bluzyrino") { Fail "runtime_id must be 'bluzyrino'." }
+    if ($manifest.version -ne "2.0.3") { Fail "Runtime version must be 2.0.3; got '$($manifest.version)'." }
+    if ($manifest.entrypoint -ne $RuntimeExeName) { Fail "Unexpected runtime entrypoint '$($manifest.entrypoint)'." }
+    if ($manifest.architecture -ne "x86_64") { Fail "Runtime architecture must be x86_64; got '$($manifest.architecture)'." }
+    if ($manifest.archive_root -ne $RuntimeDirName) { Fail "archive_root must be '$RuntimeDirName'." }
+
+    $exeSha = Get-Sha256 $entrypoint
+    if ($exeSha -ne $ExpectedExeSha) {
+        Fail "$RuntimeExeName SHA-256 mismatch. Expected $ExpectedExeSha; got $exeSha."
+    }
+
+    $rootPrefix = $resolvedRoot + "\"
+    $seen = @{}
+    $manifestBytes = [int64]0
+    foreach ($file in @($manifest.files)) {
+        $relative = [string]$file.path
+        Assert-SafeRelativePath $relative
+        $key = $relative.ToLowerInvariant()
+        if ($seen.ContainsKey($key)) { Fail "Duplicate manifest path: $relative" }
+        $seen[$key] = $true
+
+        $fullPath = [IO.Path]::GetFullPath((Join-Path $resolvedRoot $relative.Replace("/", "\")))
+        if (-not $fullPath.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+            Fail "Manifest path escapes runtime root: $relative"
+        }
+        if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+            Fail "Manifest file missing: $relative"
+        }
+        $item = Get-Item -LiteralPath $fullPath
+        if ([int64]$item.Length -ne [int64]$file.size) {
+            Fail "Manifest size mismatch for $relative."
+        }
+        if ((Get-Sha256 $fullPath) -ne ([string]$file.sha256).ToLowerInvariant()) {
+            Fail "Manifest hash mismatch for $relative."
+        }
+        $manifestBytes += [int64]$item.Length
+    }
+
+    $diskFiles = @(Get-ChildItem -LiteralPath $resolvedRoot -Recurse -File |
+        Where-Object { $_.FullName -ne $manifestPath })
+    if ($diskFiles.Count -ne @($manifest.files).Count) {
+        Fail "Disk file count ($($diskFiles.Count)) != manifest count ($(@($manifest.files).Count))."
+    }
+    foreach ($diskFile in $diskFiles) {
+        $relative = $diskFile.FullName.Substring($rootPrefix.Length).Replace("\", "/")
+        if (-not $seen.ContainsKey($relative.ToLowerInvariant())) {
+            Fail "Unlisted runtime file found: $relative"
+        }
+    }
+    if ([int64]$manifest.file_count -ne $diskFiles.Count) { Fail "Manifest file_count is incorrect." }
+    if ([int64]$manifest.total_size_bytes -ne $manifestBytes) { Fail "Manifest total_size_bytes is incorrect." }
+
+    return [PSCustomObject]@{
+        Root = $resolvedRoot
+        ManifestPath = $manifestPath
+        ManifestSha = Get-Sha256 $manifestPath
+        Version = [string]$manifest.version
+        Architecture = [string]$manifest.architecture
+        FileCount = $diskFiles.Count
+        TotalBytes = $manifestBytes
+        ExeSha = $exeSha
+    }
+}
+
+Section "A. Validate staged Bluzyrino runtime"
+$runtime = Test-RuntimeManifest $RuntimeRoot
+Write-Host "runtime root : $($runtime.Root)"
+Write-Host "version      : $($runtime.Version)"
+Write-Host "architecture : $($runtime.Architecture)"
+Write-Host "files        : $($runtime.FileCount)"
+Write-Host "bytes        : $($runtime.TotalBytes)"
+Write-Host "exe SHA-256  : $($runtime.ExeSha)"
+Write-Host "Manifest validation passed." -ForegroundColor Green
+
+if (-not (Test-Path -LiteralPath $BetaConfig -PathType Leaf)) { Fail "Beta config missing: $BetaConfig" }
+$betaCfg = Get-Content -Raw -LiteralPath $BetaConfig | ConvertFrom-Json
+if ($betaCfg.version -ne $BetaVersion) { Fail "Beta config version '$($betaCfg.version)' != '$BetaVersion'." }
+if ($betaCfg.productName -ne "StreamNook Moltorino Beta") { Fail "Unexpected beta productName." }
+if ($betaCfg.identifier -ne "com.gxufy.streamnook-moltorino.beta") { Fail "Unexpected beta identifier." }
+if ($betaCfg.bundle.active -ne $true) { Fail "Beta bundle must be active." }
+if (($betaCfg.bundle.targets -join ",") -ne "nsis") { Fail "Beta target must be exactly NSIS." }
+if ($betaCfg.bundle.windows.nsis.installMode -ne "currentUser") { Fail "NSIS installMode must be currentUser." }
+$resProp = $betaCfg.bundle.resources.PSObject.Properties["target/beta-package-resources/"]
+if ($null -eq $resProp -or $resProp.Value -ne "") { Fail "Unexpected beta resource mapping." }
+
+Section "B. Recreate generated package resources"
+$expectedStaging = Join-Path $SrcTauri "target\beta-package-resources"
+if ($StagingDir -ne $expectedStaging) { Fail "Staging path guard failed: $StagingDir" }
+if (Test-Path -LiteralPath $StagingDir) { Remove-Item -LiteralPath $StagingDir -Recurse -Force }
+New-Item -ItemType Directory -Path $StagingDir -Force | Out-Null
+$stagedRuntime = Join-Path $StagingDir $RuntimeDirName
+Copy-Item -LiteralPath $runtime.Root -Destination $stagedRuntime -Recurse -Force
+$null = Test-RuntimeManifest $stagedRuntime
+
+# Remove only stale generated runtime resources that could leak from beta.1.
+$releaseRoot = Join-Path $SrcTauri "target\release"
+$staleGenerated = @(
+    (Join-Path $releaseRoot "moltorino"),
+    (Join-Path $releaseRoot "chat-runtime"),
+    (Join-Path $releaseRoot "licenses"),
+    (Join-Path $releaseRoot "runtime-manifest.json"),
+    (Join-Path $releaseRoot "SOURCE.txt")
 )
-foreach ($rel in $mustExist) {
-    $p = Join-Path $StagingDir $rel
-    if (-not (Test-Path $p)) { Fail "Required file missing after extract: $rel" }
-    Write-Host "  [OK] $rel"
+foreach ($path in $staleGenerated) {
+    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
 }
+Write-Host "Staged target layout: $stagedRuntime"
 
-# Verify extracted runtime against runtime-manifest.json
-$manifestPath = Join-Path $StagingDir "runtime-manifest.json"
-$manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
-$moltRoot = Join-Path $StagingDir "moltorino"
-
-$mfCount = @($manifest.files).Count
-$diskFiles = Get-ChildItem -Path $moltRoot -Recurse -File
-$diskCount = @($diskFiles).Count
-$mismatch = 0
-$byteTotal = 0
-foreach ($f in $manifest.files) {
-    $fp = Join-Path $moltRoot $f.path
-    if (-not (Test-Path $fp)) { Fail "Manifest file missing on disk: $($f.path)" }
-    $item = Get-Item $fp
-    $byteTotal += $item.Length
-    if ($item.Length -ne $f.size) {
-        Write-Host "  size mismatch: $($f.path) disk=$($item.Length) manifest=$($f.size)" -ForegroundColor Red
-        $mismatch++
-        continue
-    }
-    $h = Get-Sha256 $fp
-    if ($h -ne $f.sha256.ToLower()) {
-        Write-Host "  hash mismatch: $($f.path)" -ForegroundColor Red
-        $mismatch++
-    }
-}
-Write-Host "manifest files : $mfCount"
-Write-Host "disk files     : $diskCount"
-Write-Host "byte total     : $byteTotal"
-Write-Host "mismatches     : $mismatch"
-if ($mismatch -ne 0) { Fail "Manifest verification failed ($mismatch mismatches)." }
-if ($diskCount -ne $mfCount) { Fail "Disk file count ($diskCount) != manifest count ($mfCount)." }
-
-$exeSha = Get-Sha256 (Join-Path $moltRoot "Moltorino7.exe")
-Write-Host "Moltorino7.exe : $exeSha"
-if ($exeSha -ne $ExpectedExeSha) { Fail "Moltorino7.exe SHA-256 mismatch." }
-Write-Host "Runtime verified against manifest." -ForegroundColor Green
-
-# =============================================================================
-# D. Sanitize only the staged manifest copy
-# =============================================================================
-Section "D. Sanitize staged manifest"
-
-# Rebuild the object so we drop staged_root and add archive_root without
-# touching the files array (paths/sizes/hashes preserved verbatim).
-$staged = [ordered]@{}
-foreach ($prop in $manifest.PSObject.Properties) {
-    if ($prop.Name -eq "staged_root") { continue }
-    $staged[$prop.Name] = $prop.Value
-}
-$staged["archive_root"] = "moltorino"
-($staged | ConvertTo-Json -Depth 20) | Set-Content -Path $manifestPath -Encoding UTF8
-Write-Host "Removed staged_root; added archive_root=moltorino."
-
-# Confirm no absolute dev path remains in any staged text file.
-$textExt = @(".json", ".txt", ".toml", ".md")
-$hits = 0
-Get-ChildItem -Path $StagingDir -Recurse -File | Where-Object { $textExt -contains $_.Extension.ToLower() } | ForEach-Object {
-    $c = Get-Content -Raw -Path $_.FullName
-    if ($c -match "C:\\Dev" -or $c -match "C:\\Users") {
-        Write-Host "  dev-path in: $($_.FullName)" -ForegroundColor Red
-        $hits++
-    }
-}
-Write-Host "absolute dev-path hits in staged text files: $hits"
-if ($hits -ne 0) { Fail "Absolute dev path found in staged text file(s)." }
-
-# =============================================================================
-# E. Build frontend + NSIS
-# =============================================================================
-Section "E. Build frontend + NSIS installer"
-
-# The beta binary sources its version from the compile-time STREAMNOOK_BETA_VERSION
-# env var (see src-tauri/src/build_identity.rs); without it, a --features beta-build
-# compile fails by design. Capture whatever value (if any) was already in the
-# environment so we can restore it verbatim in the finally block -- this script
-# must not leak a beta version into the caller's shell. Under Set-StrictMode the
-# $env: provider returns $null for an unset variable rather than throwing.
+Section "C. Build frontend and isolated NSIS beta"
 $priorBetaVersion = $env:STREAMNOOK_BETA_VERSION
-
 Push-Location $RepoRoot
 try {
     $env:STREAMNOOK_BETA_VERSION = $BetaVersion
-    Write-Host "STREAMNOOK_BETA_VERSION set to: $env:STREAMNOOK_BETA_VERSION"
-
-    Write-Host "Running: npm run build"
     & npm run build
     if ($LASTEXITCODE -ne 0) { Fail "npm run build failed (exit $LASTEXITCODE)." }
-
-    # Both flags are mandatory: --features beta-build flips every build-identity
-    # helper, and --config layers the beta identifier/scheme/bundle over production.
-    # Neither alone yields an isolated beta.
-    Write-Host "Running: npm run tauri -- build --config src-tauri/tauri.beta.conf.json --features beta-build"
     $buildStart = Get-Date
     & npm run tauri -- build --config "src-tauri/tauri.beta.conf.json" --features beta-build
     if ($LASTEXITCODE -ne 0) { Fail "Tauri beta build failed (exit $LASTEXITCODE)." }
 }
 finally {
     Pop-Location
-    # Restore the caller's environment exactly: re-set a prior value, or remove the
-    # variable entirely if it wasn't present before this script ran.
     if ($null -eq $priorBetaVersion) {
         Remove-Item Env:\STREAMNOOK_BETA_VERSION -ErrorAction SilentlyContinue
     } else {
@@ -253,130 +206,79 @@ finally {
     }
 }
 
-# =============================================================================
-# F. Locate outputs unambiguously
-# =============================================================================
-Section "F. Locate build outputs"
-
-$releaseExe = Join-Path $SrcTauri "target\release\$CargoBinName.exe"
-if (-not (Test-Path $releaseExe)) { Fail "Release executable not found: $releaseExe" }
-$releaseExe = (Resolve-Path $releaseExe).Path
-Write-Host "release exe : $releaseExe"
-
-$nsisDir = Join-Path $SrcTauri "target\release\bundle\nsis"
-if (-not (Test-Path $nsisDir)) { Fail "NSIS bundle dir not found: $nsisDir" }
-
-# Locate the newly generated installer: *.exe in the nsis dir modified at/after
-# the build start. Fail on zero or multiple ambiguous matches.
-$nsisAll = Get-ChildItem -Path $nsisDir -Filter "*.exe" -File
-$nsisNew = @($nsisAll | Where-Object { $_.LastWriteTime -ge $buildStart })
-if ($nsisNew.Count -eq 0) {
-    Fail "No newly generated NSIS installer found in $nsisDir (built after $buildStart)."
+Section "D. Locate and validate generated outputs"
+$releaseExe = Join-Path $releaseRoot "$CargoBinName.exe"
+$releaseRuntime = Join-Path $releaseRoot "$RuntimeDirName\$RuntimeExeName"
+if (-not (Test-Path -LiteralPath $releaseExe -PathType Leaf)) { Fail "Release executable missing." }
+if (-not (Test-Path -LiteralPath $releaseRuntime -PathType Leaf)) { Fail "Release chat runtime missing." }
+if (Test-Path -LiteralPath (Join-Path $releaseRoot "moltorino\Moltorino7.exe")) {
+    Fail "Stale legacy Moltorino runtime exists in release output."
 }
-if ($nsisNew.Count -gt 1) {
-    $names = ($nsisNew | Select-Object -ExpandProperty Name) -join ", "
-    Fail "Ambiguous NSIS installers ($($nsisNew.Count)): $names"
-}
+if ((Get-Sha256 $releaseRuntime) -ne $ExpectedExeSha) { Fail "Release Bluzyrino hash mismatch." }
+$null = Test-RuntimeManifest (Join-Path $releaseRoot $RuntimeDirName)
+
+$nsisDir = Join-Path $releaseRoot "bundle\nsis"
+$nsisNew = @(Get-ChildItem -LiteralPath $nsisDir -Filter "*.exe" -File |
+    Where-Object { $_.LastWriteTime -ge $buildStart })
+if ($nsisNew.Count -ne 1) { Fail "Expected exactly one newly generated NSIS installer; found $($nsisNew.Count)." }
 $nsisInstaller = $nsisNew[0].FullName
-Write-Host "NSIS setup  : $nsisInstaller"
 
-# =============================================================================
-# G. Assemble portable package (outside Git)
-# =============================================================================
-Section "G. Assemble portable package"
-
-New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
+Section "E. Assemble clean portable package"
+New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
 $portableRoot = Join-Path $OutputRoot $PortableName
-if (Test-Path $portableRoot) { Remove-Item -Path $portableRoot -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $portableRoot | Out-Null
-
-Copy-Item -Path $releaseExe -Destination (Join-Path $portableRoot "$CargoBinName.exe")
-
-# Copy staged package resources (moltorino\, licenses\, manifest, SOURCE.txt)
-Copy-Item -Path (Join-Path $StagingDir "moltorino") -Destination $portableRoot -Recurse
-Copy-Item -Path (Join-Path $StagingDir "licenses") -Destination $portableRoot -Recurse
-Copy-Item -Path (Join-Path $StagingDir "runtime-manifest.json") -Destination $portableRoot
-Copy-Item -Path (Join-Path $StagingDir "SOURCE.txt") -Destination $portableRoot
-
-$portableExe = Join-Path $portableRoot "moltorino\Moltorino7.exe"
-if (-not (Test-Path $portableExe)) { Fail "Portable layout missing moltorino\Moltorino7.exe" }
-Write-Host "portable root: $portableRoot"
-Write-Host "  [OK] moltorino\Moltorino7.exe present"
-
-# ZIP with StreamNook.exe directly at root (no wrapper dir): archive the
-# CONTENTS of the portable root.
 $portableZip = Join-Path $OutputRoot "$PortableName-portable.zip"
-if (Test-Path $portableZip) { Remove-Item -Path $portableZip -Force }
+$setupOut = Join-Path $OutputRoot "$PortableName-setup.exe"
+$checksums = Join-Path $OutputRoot "$PortableName-checksums.txt"
+foreach ($path in @($portableRoot, $portableZip, $setupOut, $checksums)) {
+    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
+}
+New-Item -ItemType Directory -Path $portableRoot | Out-Null
+Copy-Item -LiteralPath $releaseExe -Destination (Join-Path $portableRoot "$CargoBinName.exe")
+Copy-Item -LiteralPath (Join-Path $releaseRoot $RuntimeDirName) -Destination $portableRoot -Recurse
 
-$sevenZip = (Get-Command 7z -ErrorAction SilentlyContinue)
+$portableRuntime = Join-Path $portableRoot "$RuntimeDirName\$RuntimeExeName"
+if (-not (Test-Path -LiteralPath $portableRuntime -PathType Leaf)) { Fail "Portable Bluzyrino entrypoint missing." }
+if (Test-Path -LiteralPath (Join-Path $portableRoot "moltorino\Moltorino7.exe")) {
+    Fail "Legacy Moltorino runtime leaked into portable output."
+}
+$null = Test-RuntimeManifest (Join-Path $portableRoot $RuntimeDirName)
+$portableRuntimeSha = Get-Sha256 $portableRuntime
+
+$sevenZip = Get-Command 7z -ErrorAction SilentlyContinue
 if ($sevenZip) {
     Push-Location $portableRoot
     try {
         & 7z a -tzip -mx=9 $portableZip "*" | Out-Null
-        if ($LASTEXITCODE -ne 0) { Fail "7z portable zip failed (exit $LASTEXITCODE)." }
+        if ($LASTEXITCODE -ne 0) { Fail "7z failed (exit $LASTEXITCODE)." }
     } finally { Pop-Location }
 } else {
-    # Fallback: Compress-Archive of the contents (\* avoids a wrapper dir).
     Compress-Archive -Path (Join-Path $portableRoot "*") -DestinationPath $portableZip -Force
 }
-if (-not (Test-Path $portableZip)) { Fail "Portable ZIP was not created." }
+if (-not (Test-Path -LiteralPath $portableZip -PathType Leaf)) { Fail "Portable ZIP missing." }
 
-$portableZipSize = (Get-Item $portableZip).Length
+Copy-Item -LiteralPath $nsisInstaller -Destination $setupOut -Force
 $portableZipSha = Get-Sha256 $portableZip
-Write-Host "portable zip : $portableZip"
-Write-Host "  size       : $portableZipSize"
-Write-Host "  sha256     : $portableZipSha"
-
-# =============================================================================
-# H. Copy + rename installer
-# =============================================================================
-Section "H. Copy + rename installer"
-
-$setupOut = Join-Path $OutputRoot "$PortableName-setup.exe"
-Copy-Item -Path $nsisInstaller -Destination $setupOut -Force
-$setupSize = (Get-Item $setupOut).Length
 $setupSha = Get-Sha256 $setupOut
-Write-Host "setup exe   : $setupOut"
-Write-Host "  size      : $setupSize"
-Write-Host "  sha256    : $setupSha"
-
-# =============================================================================
-# I. Checksums
-# =============================================================================
-Section "I. Checksums"
-
-$checksums = Join-Path $OutputRoot "$PortableName-checksums.txt"
-$lines = @(
+@(
     "$portableZipSha  $PortableName-portable.zip",
-    "$setupSha  $PortableName-setup.exe"
-)
-$lines | Set-Content -Path $checksums -Encoding UTF8
-Write-Host "checksums   : $checksums"
-$lines | ForEach-Object { Write-Host "  $_" }
+    "$setupSha  $PortableName-setup.exe",
+    "$portableRuntimeSha  $RuntimeDirName/$RuntimeExeName"
+) | Set-Content -LiteralPath $checksums -Encoding UTF8
 
-# =============================================================================
-# J. Final report
-# =============================================================================
-Section "J. FINAL REPORT"
-
-# E. Re-verify the source runtime ZIP is byte-identical (unchanged since step A).
-# Presence of outputs is not proof the source was left untouched.
-$finalZipSha = Get-Sha256 $zip
-if ($finalZipSha -ne $expectedZipSha) {
-    Fail "Source runtime ZIP changed during packaging! start=$expectedZipSha end=$finalZipSha"
+Section "F. Final local-only report"
+$runtimeFinal = Test-RuntimeManifest $runtime.Root
+if ($runtimeFinal.ManifestSha -ne $runtime.ManifestSha -or $runtimeFinal.ExeSha -ne $runtime.ExeSha) {
+    Fail "External staged runtime changed during packaging."
 }
-Write-Host "source ZIP re-verified    : $finalZipSha (byte-identical)" -ForegroundColor Green
-Write-Host "runtime ZIP hash verified : $actualZipSha"
-Write-Host "staged runtime files      : $diskCount"
-Write-Host "staged runtime bytes      : $byteTotal"
-Write-Host "release executable        : $releaseExe"
-Write-Host "original NSIS installer   : $nsisInstaller"
-Write-Host "portable ZIP              : $portableZip"
-Write-Host "  bytes                   : $portableZipSize"
-Write-Host "  sha256                  : $portableZipSha"
-Write-Host "renamed setup exe         : $setupOut"
-Write-Host "  bytes                   : $setupSize"
-Write-Host "  sha256                  : $setupSha"
-Write-Host "checksums file            : $checksums"
-Write-Host ""
-Write-Host "LOCAL-ONLY prototype complete. Nothing uploaded, released, tagged, or committed." -ForegroundColor Green
+Write-Host "runtime version       : $($runtime.Version)"
+Write-Host "runtime files         : $($runtime.FileCount)"
+Write-Host "runtime bytes         : $($runtime.TotalBytes)"
+Write-Host "runtime executable SHA: $portableRuntimeSha"
+Write-Host "portable root         : $portableRoot"
+Write-Host "portable ZIP          : $portableZip"
+Write-Host "portable ZIP SHA-256  : $portableZipSha"
+Write-Host "installer             : $setupOut"
+Write-Host "installer SHA-256     : $setupSha"
+Write-Host "checksums             : $checksums"
+Write-Host "Legacy moltorino runtime absent from new portable/release output." -ForegroundColor Green
+Write-Host "LOCAL-ONLY beta packaging complete. Nothing uploaded, released, tagged, or committed." -ForegroundColor Green
