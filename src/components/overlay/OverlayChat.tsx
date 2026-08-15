@@ -6,7 +6,7 @@
 // click handlers). Both the preview and the live overlay mount THIS component,
 // so what a streamer sees while editing is exactly what viewers get.
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, HTMLAttributeReferrerPolicy, ReactNode } from 'react';
 import { Gift, Star, Users, Megaphone, DollarSign, Flame, Heart } from 'lucide-react';
 import { computePaintStyle } from '../../services/paintStyle';
@@ -723,7 +723,10 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
           className={isStreamNook ? gradientClass : outlineAnimClass}
           style={{
             flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start', gap: '0.5em',
-            padding: '3px 8px', borderRadius: 6,
+            // Em, not px: the whole renderer is drawn at ss× and scaled back down, so a
+            // raw px padding here came out half-size on the hosted overlay while the
+            // builder preview (ss=1) showed it full — the two never matched.
+            padding: '0.2em 0.55em', borderRadius: '0.4em',
             ...(isStreamNook
               ? { border: '1px solid rgba(255,255,255,0.08)' }
               : isOutline
@@ -735,7 +738,7 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
                     // supersampling), opt-in fill clipped to the padding box,
                     // opt-in border animation (eventAnimation).
                     position: 'relative',
-                    borderRadius: 8,
+                    borderRadius: '0.5em',
                     border: `0.09em solid color-mix(in srgb, ${(style.eventOutlineColor || '').trim() || meta.color} 60%, transparent)`,
                     ...(style.eventFill === true
                       ? {
@@ -747,7 +750,14 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
                 : { borderLeft: `2px solid ${meta.color}`, background: `linear-gradient(90deg, color-mix(in srgb, ${meta.color} 20%, transparent), transparent)` }),
           }}
         >
-          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', height: '1.5em' }}>
+          {/* Exactly ONE line tall, so the icon box can never make the card taller than
+              its text. A fixed 1.5em box did: at any lineHeight below 1.5 the card grew
+              past its own text and, with alignItems flex-start, the whole excess fell
+              BELOW it — the event line then read as sitting too high inside its own
+              highlight (0.4em of dead space at lineHeight 1.1). The text's first line
+              box is >= lineHeight by construction, so keying off it also centres the
+              glyph on the text. Never widen this past style.lineHeight. */}
+          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', height: `${style.lineHeight}em` }}>
             {asCheerEvent ? (
               // Twitch's own animated gem for the tier, so a promoted cheer reads the
               // same as the in-app cheer card rather than a generic currency glyph.
@@ -758,7 +768,9 @@ const OverlayRow = ({ message, style, expiring }: { message: OverlayMessage; sty
                 <path fillRule="evenodd" clipRule="evenodd" d="M11 4.5 9 2 4.8 6.9A7.48 7.48 0 0 0 3 11.77C3 15.2 5.8 18 9.23 18h1.65A6.12 6.12 0 0 0 17 11.88c0-1.86-.65-3.66-1.84-5.1L12 3l-1 1.5ZM6.32 8.2 9 5l2 2.5L12 6l1.62 2.07A5.96 5.96 0 0 1 15 11.88c0 2.08-1.55 3.8-3.56 4.08.36-.47.56-1.05.56-1.66 0-.52-.18-1.02-.5-1.43L10 11l-1.5 1.87c-.32.4-.5.91-.5 1.43 0 .6.2 1.18.54 1.64A4.23 4.23 0 0 1 5 11.77c0-1.31.47-2.58 1.32-3.57Z" />
               </svg>
             ) : isPrime ? (
-              <svg width="1em" height="1em" viewBox="0 0 20 20" fill="#60a5fa" aria-hidden="true">
+              // The artwork spans y 4→15, so it sits 0.5 high in a 0→20 box; the shifted
+              // origin centres it, matching the fire and lucide glyphs on this row.
+              <svg width="1em" height="1em" viewBox="0 -0.5 20 20" fill="#60a5fa" aria-hidden="true">
                 <path fillRule="evenodd" clipRule="evenodd" d="M18 5v8a2 2 0 0 1-2 2H4a2.002 2.002 0 0 1-2-2V5l4 3 4-4 4 4 4-3z" />
               </svg>
             ) : (
@@ -1135,11 +1147,11 @@ export const OverlayChat = ({ messages, style: rawStyle, superSample = 1 }: { me
     return () => { cancelled = true; };
   }, [style.superchatCurrency]);
   // Safety valve: bound how many times the measure pass may adjust `count` within one
-  // message-count epoch. Convergence normally takes a handful of steps; if some future
-  // row ever renders untagged (breaking the 1:1 row↔message mapping) this stops the
-  // renderer from thrashing into React's "max update depth" crash — the overlay just
-  // ends up slightly mis-sized instead of taking down the whole settings dialog.
-  const settleRef = useRef({ epoch: -1, tries: 0 });
+  // epoch. Convergence normally takes a handful of steps; if some future row ever
+  // renders untagged (breaking the 1:1 row↔message mapping) this stops the renderer
+  // from thrashing into React's "max update depth" crash — the overlay just ends up
+  // slightly mis-sized instead of taking down the whole settings dialog.
+  const settleRef = useRef<{ epoch: unknown; tries: number }>({ epoch: null, tries: 0 });
 
   // Chronological (oldest → newest), fully filtered: gift-bomb dedup, source
   // platform, hidden bots, and hidden event categories. ALL exclusions happen here
@@ -1265,10 +1277,16 @@ export const OverlayChat = ({ messages, style: rawStyle, superSample = 1 }: { me
     const gap = gapPx;
     const domRows = Array.from(el.querySelectorAll<HTMLElement>('[data-ov-row]'));
     if (domRows.length === 0) return;
-    // Reset the adjust-budget whenever the message count changes (a new epoch); bail
-    // if we've already adjusted too many times this epoch without settling.
+    // Reset the adjust-budget whenever the message set changes (a new epoch); bail if
+    // we've already adjusted too many times this epoch without settling. Key on the
+    // set's IDENTITY, not its length: the feed buffer saturates at its cap, so on a
+    // busy channel the length pins there forever, the epoch never resets, and after 30
+    // adjustments this pass switches itself off for the rest of the session — the row
+    // count freezes and the canvas stops filling (short chat, exit fade never reached).
+    // `ordered` is a fresh array whenever the rows could have changed, which is exactly
+    // what "a new epoch" was always meant to mean.
     const settle = settleRef.current;
-    if (settle.epoch !== ordered.length) { settle.epoch = ordered.length; settle.tries = 0; }
+    if (settle.epoch !== ordered) { settle.epoch = ordered; settle.tries = 0; }
     if (settle.tries > 30) return;
     // Newest → older, so we count from the anchored edge outward. `fit` = rows up to
     // and including the first that crosses the edge; `overflowed` = we mounted enough
@@ -1297,15 +1315,53 @@ export const OverlayChat = ({ messages, style: rawStyle, superSample = 1 }: { me
     if (target !== count) { settle.tries++; setCount(target); }
   });
 
+  // Force the measure pass to run again when nothing re-rendered. Clearing the
+  // adjust-budget is part of it: an external nudge is precisely the case the `tries`
+  // cap must not swallow, or the rescue arrives at a pass that has already bailed.
+  const remeasure = useCallback(() => {
+    settleRef.current.tries = 0;
+    forceMeasure((n) => n + 1);
+  }, []);
+
   // Re-measure when the canvas itself resizes (height slider, window resize) even
   // if no new message arrived.
   useEffect(() => {
     const el = containerRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => forceMeasure((n) => n + 1));
+    const ro = new ResizeObserver(remeasure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [remeasure]);
+
+  // Row heights change after mount when text re-wraps — a webfont swapping in, or a
+  // lazy emote/badge image resolving its width. Neither causes a React render, so the
+  // measure pass never sees it and the row count stays latched at the pre-swap fit.
+  useEffect(() => {
+    const fonts = document.fonts;
+    if (!fonts) return;
+    let alive = true;
+    const bump = () => { if (alive) remeasure(); };
+    // `ready` can resolve before the stylesheet link is even injected (it's on a 250ms
+    // debounce), so `loadingdone` is the load-bearing one. Keep both.
+    void fonts.ready.then(bump);
+    fonts.addEventListener('loadingdone', bump);
+    return () => { alive = false; fonts.removeEventListener('loadingdone', bump); };
+  }, [remeasure]);
+
+  // OBS loads a browser source sitting in an inactive scene while it is hidden: timers
+  // are throttled and lazy images don't load, so the first measure can run against rows
+  // that aren't laid out yet. Re-measure the moment it's shown. The obs* events are
+  // dispatched by obs-browser and are simply never fired anywhere else.
+  useEffect(() => {
+    const targets: Array<[EventTarget, string]> = [
+      [document, 'visibilitychange'],
+      [window, 'resize'],
+      [window, 'obsSourceActiveChanged'],
+      [window, 'obsSourceVisibleChanged'],
+    ];
+    for (const [t, e] of targets) t.addEventListener(e, remeasure);
+    return () => { for (const [t, e] of targets) t.removeEventListener(e, remeasure); };
+  }, [remeasure]);
 
   // Soft exit edge: a message reaching the edge where old ones age out should
   // DISSOLVE, never show a hard half-row. This gradient mask fades the last ~1.5
