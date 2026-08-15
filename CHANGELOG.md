@@ -1,3 +1,9 @@
+## [8.4.1] - 2026-08-14
+
+### 🐛 Bug Fixes
+- Custom channel cheermotes now animate in chat with the right tier colors and art at every bits amount. Channels with their own cheermote (and even Twitch's Cheerwhal) used to show up as plain text.
+- Overlay event cards now look identical for your viewers and in the builder preview. Cards on the hosted overlay rendered with smaller padding and rounding than the preview showed, and an event line could sit too high inside its own highlight at tighter line heights.
+
 ## [8.4.0] - 2026-08-10
 
 ## 🎉 New: Chat replay on clips
