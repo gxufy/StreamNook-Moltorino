@@ -1,3 +1,30 @@
+## [8.4.2] - 2026-08-16
+
+## 🔦 Feature Spotlight: The Command Palette
+> Meet the Feature Spotlight, a new series in these release notes. Each spotlight shines a light on something StreamNook can already do that you might not have discovered yet. First up: press Ctrl+K anywhere and the command palette opens, one search box that finds everything in the app.
+
+![The StreamNook command palette](https://raw.githubusercontent.com/winters27/StreamNook/main/.github/assets/spotlight-command-palette.png)
+
+---
+
+### ✨ Features
+- If you have never tried the command palette, here is what Ctrl+K can do:
+  - Jump straight to any streamer you follow, search for new ones, or browse categories.
+  - Open any settings page instantly. Every setting is searchable by name, no digging through tabs.
+  - Fire quick actions without touching the mouse: MultiChat, the Drops center, Badges and Paints, Whispers, your profile, Compact View, full screen, and more.
+  - Act on the current stream: jump between your open chats, share the stream, or find recent chatters from the channel you are watching.
+  - Save chat snippets with custom aliases and favorites, then send them straight from the palette. There is a built-in guide and snippet manager too, just search "guide".
+- The command palette now introduces itself: look for hints in the loading messages, the settings sidebar, and the setup wizard.
+
+### 🐛 Bug Fixes
+- Fixed chat that could silently stop receiving new messages while sending kept working, even after a refresh. The chat connection now heals itself: dead or stalled connections are detected within about a minute, reconnection retries automatically with smart backoff, and sign-in credentials refresh on every attempt instead of going stale.
+- Messages missed while chat was reconnecting are now fetched and stitched back into their correct place in the conversation, with an inline marker showing where the connection dropped.
+- Reconnecting with many chats open now rejoins channels at a safe pace, avoiding Twitch's join limits.
+- Fixed stream overlays that could collapse onto one shared link when switching profiles while edits were saving. Each profile now keeps its own overlay URL, and affected setups repair themselves the next time the profile is published.
+
+### 🔧 Maintenance
+- Chat connection events are now kept in a small diagnostic log, making connection reports much easier to track down.
+
 ## [8.4.1] - 2026-08-14
 
 ### 🐛 Bug Fixes
