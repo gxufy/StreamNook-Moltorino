@@ -113,6 +113,13 @@ const FUNNY_MESSAGES = [
   '{WAYTOODANK} too fast to render',
   '{Okayeg} loading, eg',
 
+  // --- Ctrl+K discovery, the feature nobody finds on their own ---
+  'Ctrl+K opens the command palette, try it',
+  'Everything in this app is one Ctrl+K away',
+  'Ctrl+K searches streamers, settings and actions',
+  'Press Ctrl+K sometime, thank us later',
+  'Lost in the settings? Ctrl+K knows the way',
+
   // --- Timeless streamer and nerd humour ---
   'It is always DNS',
   'Blaming the router',
