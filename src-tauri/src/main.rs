@@ -866,6 +866,8 @@ fn main() {
             // Chat commands
             start_chat,
             stop_chat,
+            get_chat_lifecycle_log,
+            debug_break_chat_socket,
             send_chat_message,
             join_chat_channel,
             leave_chat_channel,
