@@ -159,11 +159,20 @@ const PROFILES_KEY = 'sn_overlay_profiles_v1';
 const ACTIVE_PROFILE_KEY = 'sn_overlay_active_v1';
 
 interface OverlayProfile {
+  // Stable client-side identity for this profile. Publish responses are routed
+  // by uid so a mid-flight profile switch can never stamp one profile's row id
+  // onto another. Never sent to the server.
+  uid: string;
   name: string;
   id: string | null;
   style: OverlayStyle;
   sources: OverlaySource[];
 }
+
+const newProfileUid = (): string =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `p-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 function loadProfiles(): { profiles: OverlayProfile[]; active: number } {
   try {
@@ -171,12 +180,28 @@ function loadProfiles(): { profiles: OverlayProfile[]; active: number } {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<OverlayProfile>[];
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const profiles = parsed.map((p, i) => ({
-          name: typeof p?.name === 'string' && p.name.trim() ? p.name : `Overlay ${i + 1}`,
-          id: typeof p?.id === 'string' && p.id ? p.id : null,
-          style: clampOverlayStyle({ ...DEFAULT_OVERLAY_STYLE, ...(p?.style ?? {}) } as OverlayStyle),
-          sources: Array.isArray(p?.sources) ? (p.sources as OverlaySource[]) : [],
-        }));
+        const usedUids = new Set<string>();
+        const profiles = parsed.map((p, i) => {
+          const uid = typeof p?.uid === 'string' && p.uid && !usedUids.has(p.uid) ? p.uid : newProfileUid();
+          usedUids.add(uid);
+          return {
+            uid,
+            name: typeof p?.name === 'string' && p.name.trim() ? p.name : `Overlay ${i + 1}`,
+            id: typeof p?.id === 'string' && p.id ? p.id : null,
+            style: clampOverlayStyle({ ...DEFAULT_OVERLAY_STYLE, ...(p?.style ?? {}) } as OverlayStyle),
+            sources: Array.isArray(p?.sources) ? (p.sources as OverlaySource[]) : [],
+          };
+        });
+        // Repair: no two profiles may claim the same published row (a pre-fix
+        // race could stamp one row's id onto two profiles). First claim keeps
+        // the link; later claimants go unpublished so their next publish mints
+        // a fresh row.
+        const seenIds = new Set<string>();
+        for (const p of profiles) {
+          if (!p.id) continue;
+          if (seenIds.has(p.id)) p.id = null;
+          else seenIds.add(p.id);
+        }
         const stored = parseInt(localStorage.getItem(ACTIVE_PROFILE_KEY) || '0', 10);
         const active = Math.min(profiles.length - 1, Math.max(0, Number.isFinite(stored) ? stored : 0));
         return { profiles, active };
@@ -185,7 +210,7 @@ function loadProfiles(): { profiles: OverlayProfile[]; active: number } {
   } catch { /* fall through to migration */ }
   // First run on this build (or unreadable list): adopt the legacy keys.
   return {
-    profiles: [{ name: 'Default', id: loadOverlayId(), style: loadStyle(), sources: loadSources() }],
+    profiles: [{ uid: newProfileUid(), name: 'Default', id: loadOverlayId(), style: loadStyle(), sources: loadSources() }],
     active: 0,
   };
 }
@@ -451,6 +476,10 @@ const OverlaySettings = () => {
   );
   // The ACTIVE profile's published id; re-publish updates the same link.
   const overlayIdRef = useRef<string | null>(initial.profiles[initial.active].id);
+  // Which profile the editor is showing, by stable uid. Publish requests never
+  // read this (they build from their render closure); a response consults it to
+  // decide whether the editor is still on the profile the push was for.
+  const activeUidRef = useRef<string>(initial.profiles[initial.active].uid);
 
   // The scaled stage measures its own width so the overlay canvas fits the pane
   // at true proportions (scaled down when the canvas is wider than the pane).
@@ -489,7 +518,7 @@ const OverlaySettings = () => {
   // keys so anything still reading them sees the overlay being edited.
   useEffect(() => {
     setProfiles((list) =>
-      list.map((p, i) => (i === activeIdx ? { ...p, style, sources, id: overlayIdRef.current } : p)),
+      list.map((p, i) => (i === activeIdx ? { ...p, style, sources } : p)),
     );
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(style));
@@ -604,6 +633,15 @@ const OverlaySettings = () => {
   // update the same link whenever a setting changes, so the published overlay is
   // always a direct mirror of the builder — no need to re-copy after tweaking.
   const pushConfig = async (copy: boolean) => {
+    // The whole request comes from THIS render's closure: profiles/activeIdx/
+    // style/sources are mutually consistent by construction, so the push can
+    // never mix one profile's config with another profile's row id, no matter
+    // when the debounce timer fires or the response lands. The live refs are
+    // only consulted at response time, to decide whether the editor is still
+    // showing this profile.
+    const forProfile = profiles[activeIdx];
+    if (!forProfile) return;
+    const forUid = forProfile.uid;
     if (sources.length === 0) {
       if (copy) { setPublishError('Add at least one source first.'); setPublishState('error'); }
       return;
@@ -616,21 +654,23 @@ const OverlaySettings = () => {
       } catch {
         throw new Error('Sign in to Twitch in StreamNook to publish an overlay.');
       }
-      // Minting an ADDITIONAL overlay (another profile already owns one) must
-      // never fold into the account's existing row — `create` skips the
-      // account-reuse fallback server-side. The very first overlay keeps the
-      // legacy reuse semantics, so a fresh install still adopts the account's
-      // stable link instead of minting a duplicate. The profile name rides
-      // inside the style so other machines recover it.
-      const create = !overlayIdRef.current && profiles.some((p) => p.id) ? true : undefined;
+      // With multiple profiles the account-reuse fallback is NEVER safe: it
+      // fires whenever the sent id matches no row owned by the current account
+      // (new profile, concurrent first publishes, Twitch account switch) and
+      // would fold this profile into a sibling's row. create + owned id =
+      // update in place; create + unusable id = mint fresh. Single-profile
+      // installs keep the legacy reuse so a fresh machine adopts the account's
+      // stable link. The profile name rides inside the style so other machines
+      // recover it.
+      const create = profiles.length > 1 ? true : undefined;
       const res = await fetch(PUBLISH_ENDPOINT, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          id: overlayIdRef.current ?? undefined,
+          id: forProfile.id ?? undefined,
           create,
           channels: sources,
-          style: { ...style, profileName: profiles[activeIdx]?.name },
+          style: { ...style, profileName: forProfile.name },
         }),
       });
       if (!res.ok) {
@@ -643,16 +683,32 @@ const OverlaySettings = () => {
         );
       }
       const data = (await res.json()) as { id: string; url: string };
-      overlayIdRef.current = data.id;
-      setProfiles((list) => list.map((p, i) => (i === activeIdx ? { ...p, id: data.id } : p)));
-      try { localStorage.setItem(OVERLAY_ID_KEY, data.id); } catch { /* ignore */ }
-      setPublishedUrl(data.url);
-      if (copy) {
-        try { await navigator.clipboard.writeText(data.url); } catch { /* clipboard may be blocked; URL still shown */ }
-        setPublishState('done');
+      // Stamp the returned id onto the profile this push was for, and strip it
+      // from any other profile that claims the same row (self-heals older
+      // corruption).
+      setProfiles((list) =>
+        list.map((p) =>
+          p.uid === forUid ? { ...p, id: data.id } : p.id === data.id ? { ...p, id: null } : p,
+        ),
+      );
+      if (activeUidRef.current === forUid) {
+        overlayIdRef.current = data.id;
+        try { localStorage.setItem(OVERLAY_ID_KEY, data.id); } catch { /* ignore */ }
+        setPublishedUrl(data.url);
+        if (copy) {
+          try { await navigator.clipboard.writeText(data.url); } catch { /* clipboard may be blocked; URL still shown */ }
+          setPublishState('done');
+        }
+      } else if (copy) {
+        // Finished after the user switched away; don't paint result state onto
+        // the profile now on screen.
+        setPublishState('idle');
       }
     } catch (e) {
-      if (copy) { setPublishError(e instanceof Error ? e.message : 'Publish failed.'); setPublishState('error'); }
+      if (copy && activeUidRef.current === forUid) {
+        setPublishError(e instanceof Error ? e.message : 'Publish failed.');
+        setPublishState('error');
+      }
     }
   };
 
@@ -662,7 +718,7 @@ const OverlaySettings = () => {
   // re-push on any style/source change (debounced), so the streamer never has to
   // re-copy after tweaking a setting.
   useEffect(() => {
-    if (!overlayIdRef.current) return;
+    if (!profiles[activeIdx]?.id) return;
     const t = setTimeout(() => { void pushConfig(false); }, 1500);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -670,6 +726,7 @@ const OverlaySettings = () => {
 
   // Load a profile's saved state into the working editor state.
   const applyProfile = (p: OverlayProfile) => {
+    activeUidRef.current = p.uid;
     overlayIdRef.current = p.id;
     setStyle(clampOverlayStyle({ ...DEFAULT_OVERLAY_STYLE, ...p.style } as OverlayStyle));
     setSources(p.sources);
@@ -701,6 +758,7 @@ const OverlaySettings = () => {
   // another profile's row).
   const addProfile = (duplicate: boolean) => {
     const p: OverlayProfile = {
+      uid: newProfileUid(),
       name: uniqueProfileName(duplicate ? `${profiles[activeIdx].name} copy` : `Overlay ${profiles.length + 1}`),
       id: null,
       style: duplicate ? { ...style } : { ...DEFAULT_OVERLAY_STYLE },
@@ -723,7 +781,15 @@ const OverlaySettings = () => {
 
   const deleteProfile = async () => {
     if (profiles.length <= 1) return;
+    // Local state math runs synchronously BEFORE the await below, so a publish
+    // response landing during the credentials round-trip can't be clobbered by
+    // a stale list.
     const victim = profiles[activeIdx];
+    const nextList = profiles.filter((_, i) => i !== activeIdx);
+    const nextIdx = Math.max(0, activeIdx - 1);
+    setProfiles(nextList);
+    setActiveIdx(nextIdx);
+    applyProfile(nextList[nextIdx]);
     // Best-effort soft-delete server-side so the old OBS link stops serving;
     // signed-out/offline just leaves the row, which is harmless.
     if (victim.id) {
@@ -732,11 +798,6 @@ const OverlaySettings = () => {
         void fetch(`${PUBLISH_ENDPOINT}/${victim.id}`, { method: 'DELETE', headers: { authorization: `Bearer ${token}` } });
       } catch { /* not signed in */ }
     }
-    const nextList = profiles.filter((_, i) => i !== activeIdx);
-    const nextIdx = Math.max(0, activeIdx - 1);
-    setProfiles(nextList);
-    setActiveIdx(nextIdx);
-    applyProfile(nextList[nextIdx]);
   };
 
   // Cross-machine recovery: overlays are keyed to the Twitch account, so when
@@ -775,6 +836,7 @@ const OverlaySettings = () => {
                 .map((c) => ({ provider: c.provider as ProviderId, channel: c.channel as string }))
             : [];
           return {
+            uid: newProfileUid(),
             name: typeof st.profileName === 'string' && st.profileName.trim() ? st.profileName : `Overlay ${i + 1}`,
             id: r.id as string,
             style: clampOverlayStyle({ ...DEFAULT_OVERLAY_STYLE, ...st } as OverlayStyle),
