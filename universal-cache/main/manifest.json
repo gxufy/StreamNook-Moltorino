@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_sync": 1786948896,
+  "last_sync": 1787034310,
   "entries": {
     "global_badges": {
       "id": "global_badges",
@@ -1079,6 +1079,21 @@
               ]
             },
             {
+              "set_id": "bulbasaur",
+              "versions": [
+                {
+                  "id": "1",
+                  "image_url_1x": "https://static-cdn.jtvnw.net/badges/v1/68072d07-8648-4066-9694-3f9fb594eb3d/1",
+                  "image_url_2x": "https://static-cdn.jtvnw.net/badges/v1/68072d07-8648-4066-9694-3f9fb594eb3d/2",
+                  "image_url_4x": "https://static-cdn.jtvnw.net/badges/v1/68072d07-8648-4066-9694-3f9fb594eb3d/3",
+                  "title": "Bulbasaur",
+                  "description": "This badge was earned during the Pokémon First Partners Collection campaign.",
+                  "click_action": null,
+                  "click_url": null
+                }
+              ]
+            },
+            {
               "set_id": "bungie-foundation-ally",
               "versions": [
                 {
@@ -1120,6 +1135,21 @@
                   "description": "Earned by watching CDawg's 5th Charity Cyclethon 2026!",
                   "click_action": "visit_url",
                   "click_url": "https://tiltify.com/@cdawgva/cyclethon-5"
+                }
+              ]
+            },
+            {
+              "set_id": "charmander",
+              "versions": [
+                {
+                  "id": "1",
+                  "image_url_1x": "https://static-cdn.jtvnw.net/badges/v1/afe60f97-56d1-493d-a55c-2f1cec7aca7c/1",
+                  "image_url_2x": "https://static-cdn.jtvnw.net/badges/v1/afe60f97-56d1-493d-a55c-2f1cec7aca7c/2",
+                  "image_url_4x": "https://static-cdn.jtvnw.net/badges/v1/afe60f97-56d1-493d-a55c-2f1cec7aca7c/3",
+                  "title": "Charmander",
+                  "description": "This badge was earned during the Pokémon First Partners Collection campaign.",
+                  "click_action": null,
+                  "click_url": null
                 }
               ]
             },
@@ -3734,6 +3764,21 @@
               ]
             },
             {
+              "set_id": "pichu",
+              "versions": [
+                {
+                  "id": "1",
+                  "image_url_1x": "https://static-cdn.jtvnw.net/badges/v1/20f214cf-36b0-4b42-8992-3b769bcb0461/1",
+                  "image_url_2x": "https://static-cdn.jtvnw.net/badges/v1/20f214cf-36b0-4b42-8992-3b769bcb0461/2",
+                  "image_url_4x": "https://static-cdn.jtvnw.net/badges/v1/20f214cf-36b0-4b42-8992-3b769bcb0461/3",
+                  "title": "Pichu",
+                  "description": "This badge was earned during the Pokémon First Partners Collection campaign.",
+                  "click_action": null,
+                  "click_url": null
+                }
+              ]
+            },
+            {
               "set_id": "pogchamps-6-7",
               "versions": [
                 {
@@ -4658,6 +4703,21 @@
                   "image_url_4x": "https://static-cdn.jtvnw.net/badges/v1/03ba20e2-11e1-481c-80d8-155e87afc724/3",
                   "title": "Spiderman",
                   "description": "This badge was earned by subscribing or gifting a sub to a streamer in the Marvel Tōkon category during the Open Beta!",
+                  "click_action": null,
+                  "click_url": null
+                }
+              ]
+            },
+            {
+              "set_id": "squirtle",
+              "versions": [
+                {
+                  "id": "1",
+                  "image_url_1x": "https://static-cdn.jtvnw.net/badges/v1/6e19714e-571f-4737-bc8b-865ebfb3e2c7/1",
+                  "image_url_2x": "https://static-cdn.jtvnw.net/badges/v1/6e19714e-571f-4737-bc8b-865ebfb3e2c7/2",
+                  "image_url_4x": "https://static-cdn.jtvnw.net/badges/v1/6e19714e-571f-4737-bc8b-865ebfb3e2c7/3",
+                  "title": "Squirtle",
+                  "description": "This badge was earned during the Pokémon First Partners Collection campaign.",
                   "click_action": null,
                   "click_url": null
                 }
@@ -6385,10 +6445,10 @@
             }
           ]
         },
-        "cached_at": 1786948400
+        "cached_at": 1787034307
       },
       "metadata": {
-        "timestamp": 1786948400,
+        "timestamp": 1787034307,
         "expiry_days": 7,
         "source": "twitch",
         "version": 1
@@ -6408,7 +6468,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 419
+      "position": 423
     },
     "metadata:60-seconds_1-v1": {
       "id": "metadata:60-seconds_1-v1",
@@ -6424,7 +6484,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 376
+      "position": 380
     },
     "metadata:60-seconds_2-v1": {
       "id": "metadata:60-seconds_2-v1",
@@ -6440,7 +6500,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 377
+      "position": 381
     },
     "metadata:60-seconds_3-v1": {
       "id": "metadata:60-seconds_3-v1",
@@ -6456,7 +6516,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 378
+      "position": 382
     },
     "metadata:H1Z1_1-v1": {
       "id": "metadata:H1Z1_1-v1",
@@ -6472,7 +6532,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 412
+      "position": 416
     },
     "metadata:admin-v1": {
       "id": "metadata:admin-v1",
@@ -6488,7 +6548,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 333
+      "position": 337
     },
     "metadata:alone-v1": {
       "id": "metadata:alone-v1",
@@ -6504,7 +6564,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 180
+      "position": 184
     },
     "metadata:ambassador-v1": {
       "id": "metadata:ambassador-v1",
@@ -6520,7 +6580,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 326
+      "position": 330
     },
     "metadata:anomaly-2_1-v1": {
       "id": "metadata:anomaly-2_1-v1",
@@ -6536,7 +6596,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 420
+      "position": 424
     },
     "metadata:anomaly-warzone-earth_1-v1": {
       "id": "metadata:anomaly-warzone-earth_1-v1",
@@ -6552,7 +6612,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 421
+      "position": 425
     },
     "metadata:anonymous-cheerer-v1": {
       "id": "metadata:anonymous-cheerer-v1",
@@ -6568,7 +6628,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 354
+      "position": 358
     },
     "metadata:arc-raiders-launch-2025-v1": {
       "id": "metadata:arc-raiders-launch-2025-v1",
@@ -6584,7 +6644,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 171
+      "position": 175
     },
     "metadata:arcane-season-2-premiere-v1": {
       "id": "metadata:arcane-season-2-premiere-v1",
@@ -6600,7 +6660,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 227
+      "position": 231
     },
     "metadata:artist-badge-v1": {
       "id": "metadata:artist-badge-v1",
@@ -6616,7 +6676,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 315
+      "position": 319
     },
     "metadata:axiom-verge_1-v1": {
       "id": "metadata:axiom-verge_1-v1",
@@ -6632,7 +6692,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 422
+      "position": 426
     },
     "metadata:battlechefbrigade_1-v1": {
       "id": "metadata:battlechefbrigade_1-v1",
@@ -6648,7 +6708,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 399
+      "position": 403
     },
     "metadata:battlechefbrigade_2-v1": {
       "id": "metadata:battlechefbrigade_2-v1",
@@ -6664,7 +6724,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 400
+      "position": 404
     },
     "metadata:battlechefbrigade_3-v1": {
       "id": "metadata:battlechefbrigade_3-v1",
@@ -6680,7 +6740,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 401
+      "position": 405
     },
     "metadata:battlefield-6-v1": {
       "id": "metadata:battlefield-6-v1",
@@ -6696,7 +6756,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 178
+      "position": 182
     },
     "metadata:battlerite_1-v1": {
       "id": "metadata:battlerite_1-v1",
@@ -6712,7 +6772,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 402
+      "position": 406
     },
     "metadata:bits-v1": {
       "id": "metadata:bits-v1",
@@ -6728,7 +6788,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 457
+      "position": 461
     },
     "metadata:bits-v100": {
       "id": "metadata:bits-v100",
@@ -6744,7 +6804,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 458
+      "position": 462
     },
     "metadata:bits-v1000": {
       "id": "metadata:bits-v1000",
@@ -6760,7 +6820,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 459
+      "position": 463
     },
     "metadata:bits-v10000": {
       "id": "metadata:bits-v10000",
@@ -6776,7 +6836,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 460
+      "position": 464
     },
     "metadata:bits-v100000": {
       "id": "metadata:bits-v100000",
@@ -6792,7 +6852,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 461
+      "position": 465
     },
     "metadata:bits-v1000000": {
       "id": "metadata:bits-v1000000",
@@ -6808,7 +6868,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 445
+      "position": 449
     },
     "metadata:bits-v1250000": {
       "id": "metadata:bits-v1250000",
@@ -6824,7 +6884,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 379
+      "position": 383
     },
     "metadata:bits-v1500000": {
       "id": "metadata:bits-v1500000",
@@ -6840,7 +6900,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 380
+      "position": 384
     },
     "metadata:bits-v1750000": {
       "id": "metadata:bits-v1750000",
@@ -6856,7 +6916,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 381
+      "position": 385
     },
     "metadata:bits-v200000": {
       "id": "metadata:bits-v200000",
@@ -6872,7 +6932,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 446
+      "position": 450
     },
     "metadata:bits-v2000000": {
       "id": "metadata:bits-v2000000",
@@ -6888,7 +6948,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 382
+      "position": 386
     },
     "metadata:bits-v25000": {
       "id": "metadata:bits-v25000",
@@ -6904,7 +6964,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 447
+      "position": 451
     },
     "metadata:bits-v2500000": {
       "id": "metadata:bits-v2500000",
@@ -6920,7 +6980,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 383
+      "position": 387
     },
     "metadata:bits-v300000": {
       "id": "metadata:bits-v300000",
@@ -6936,7 +6996,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 448
+      "position": 452
     },
     "metadata:bits-v3000000": {
       "id": "metadata:bits-v3000000",
@@ -6952,7 +7012,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 384
+      "position": 388
     },
     "metadata:bits-v3500000": {
       "id": "metadata:bits-v3500000",
@@ -6968,7 +7028,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 385
+      "position": 389
     },
     "metadata:bits-v400000": {
       "id": "metadata:bits-v400000",
@@ -6984,7 +7044,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 449
+      "position": 453
     },
     "metadata:bits-v4000000": {
       "id": "metadata:bits-v4000000",
@@ -7000,7 +7060,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 386
+      "position": 390
     },
     "metadata:bits-v4500000": {
       "id": "metadata:bits-v4500000",
@@ -7016,7 +7076,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 387
+      "position": 391
     },
     "metadata:bits-v5000": {
       "id": "metadata:bits-v5000",
@@ -7032,7 +7092,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 462
+      "position": 466
     },
     "metadata:bits-v50000": {
       "id": "metadata:bits-v50000",
@@ -7048,7 +7108,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 450
+      "position": 454
     },
     "metadata:bits-v500000": {
       "id": "metadata:bits-v500000",
@@ -7064,7 +7124,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 451
+      "position": 455
     },
     "metadata:bits-v5000000": {
       "id": "metadata:bits-v5000000",
@@ -7080,7 +7140,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 388
+      "position": 392
     },
     "metadata:bits-v600000": {
       "id": "metadata:bits-v600000",
@@ -7096,7 +7156,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 452
+      "position": 456
     },
     "metadata:bits-v700000": {
       "id": "metadata:bits-v700000",
@@ -7112,7 +7172,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 453
+      "position": 457
     },
     "metadata:bits-v75000": {
       "id": "metadata:bits-v75000",
@@ -7128,7 +7188,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 454
+      "position": 458
     },
     "metadata:bits-v800000": {
       "id": "metadata:bits-v800000",
@@ -7144,7 +7204,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 455
+      "position": 459
     },
     "metadata:bits-v900000": {
       "id": "metadata:bits-v900000",
@@ -7160,7 +7220,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 456
+      "position": 460
     },
     "metadata:bits-charity-v1": {
       "id": "metadata:bits-charity-v1",
@@ -7176,7 +7236,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 363
+      "position": 367
     },
     "metadata:bits-leader-v1": {
       "id": "metadata:bits-leader-v1",
@@ -7192,7 +7252,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 345
+      "position": 349
     },
     "metadata:bits-leader-v2": {
       "id": "metadata:bits-leader-v2",
@@ -7208,7 +7268,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 346
+      "position": 350
     },
     "metadata:bits-leader-v3": {
       "id": "metadata:bits-leader-v3",
@@ -7224,7 +7284,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 347
+      "position": 351
     },
     "metadata:black-ops-7-global-launch-v1": {
       "id": "metadata:black-ops-7-global-launch-v1",
@@ -7240,7 +7300,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 170
+      "position": 174
     },
     "metadata:borderlands-4-badge---ripper-v1": {
       "id": "metadata:borderlands-4-badge---ripper-v1",
@@ -7256,7 +7316,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 207
+      "position": 211
     },
     "metadata:borderlands-4-badge---vault-symbol-v1": {
       "id": "metadata:borderlands-4-badge---vault-symbol-v1",
@@ -7272,7 +7332,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 206
+      "position": 210
     },
     "metadata:bot-badge-v1": {
       "id": "metadata:bot-badge-v1",
@@ -7288,7 +7348,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 208
+      "position": 212
     },
     "metadata:brawlhalla_1-v1": {
       "id": "metadata:brawlhalla_1-v1",
@@ -7304,7 +7364,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 423
+      "position": 427
     },
     "metadata:broadcaster-v1": {
       "id": "metadata:broadcaster-v1",
@@ -7320,7 +7380,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 334
+      "position": 338
     },
     "metadata:broken-age_1-v1": {
       "id": "metadata:broken-age_1-v1",
@@ -7336,7 +7396,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 424
+      "position": 428
     },
     "metadata:bubsy-the-woolies_1-v1": {
       "id": "metadata:bubsy-the-woolies_1-v1",
@@ -7352,7 +7412,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 404
+      "position": 408
     },
     "metadata:chatter-cs-go-2022-v1": {
       "id": "metadata:chatter-cs-go-2022-v1",
@@ -7368,7 +7428,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 251
+      "position": 255
     },
     "metadata:clip-champ-v1": {
       "id": "metadata:clip-champ-v1",
@@ -7384,7 +7444,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 335
+      "position": 339
     },
     "metadata:clip-the-halls-v1": {
       "id": "metadata:clip-the-halls-v1",
@@ -7400,7 +7460,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 223
+      "position": 227
     },
     "metadata:clips-leader-v1": {
       "id": "metadata:clips-leader-v1",
@@ -7416,7 +7476,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 213
+      "position": 217
     },
     "metadata:clips-leader-v2": {
       "id": "metadata:clips-leader-v2",
@@ -7432,7 +7492,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 214
+      "position": 218
     },
     "metadata:clips-leader-v3": {
       "id": "metadata:clips-leader-v3",
@@ -7448,7 +7508,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 215
+      "position": 219
     },
     "metadata:creator-cs-go-2022-v1": {
       "id": "metadata:creator-cs-go-2022-v1",
@@ -7464,7 +7524,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 252
+      "position": 256
     },
     "metadata:cuphead_1-v1": {
       "id": "metadata:cuphead_1-v1",
@@ -7480,7 +7540,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 410
+      "position": 414
     },
     "metadata:darkest-dungeon_1-v1": {
       "id": "metadata:darkest-dungeon_1-v1",
@@ -7496,7 +7556,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 425
+      "position": 429
     },
     "metadata:deceit_1-v1": {
       "id": "metadata:deceit_1-v1",
@@ -7512,7 +7572,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 414
+      "position": 418
     },
     "metadata:destiny-2-final-shape-raid-race-v1": {
       "id": "metadata:destiny-2-final-shape-raid-race-v1",
@@ -7528,7 +7588,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 235
+      "position": 239
     },
     "metadata:destiny-2-the-final-shape-streamer-v1": {
       "id": "metadata:destiny-2-the-final-shape-streamer-v1",
@@ -7544,7 +7604,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 236
+      "position": 240
     },
     "metadata:devil-may-cry-hd_1-v1": {
       "id": "metadata:devil-may-cry-hd_1-v1",
@@ -7560,7 +7620,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 389
+      "position": 393
     },
     "metadata:devil-may-cry-hd_2-v1": {
       "id": "metadata:devil-may-cry-hd_2-v1",
@@ -7576,7 +7636,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 390
+      "position": 394
     },
     "metadata:devil-may-cry-hd_3-v1": {
       "id": "metadata:devil-may-cry-hd_3-v1",
@@ -7592,7 +7652,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 391
+      "position": 395
     },
     "metadata:devil-may-cry-hd_4-v1": {
       "id": "metadata:devil-may-cry-hd_4-v1",
@@ -7608,7 +7668,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 392
+      "position": 396
     },
     "metadata:devilian_1-v1": {
       "id": "metadata:devilian_1-v1",
@@ -7624,7 +7684,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 426
+      "position": 430
     },
     "metadata:dragonscimmy-v1": {
       "id": "metadata:dragonscimmy-v1",
@@ -7640,7 +7700,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 163
+      "position": 167
     },
     "metadata:dreamcon-2024-v1": {
       "id": "metadata:dreamcon-2024-v1",
@@ -7656,7 +7716,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 230
+      "position": 234
     },
     "metadata:duelyst_1-v1": {
       "id": "metadata:duelyst_1-v1",
@@ -7672,7 +7732,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 367
+      "position": 371
     },
     "metadata:duelyst_2-v1": {
       "id": "metadata:duelyst_2-v1",
@@ -7688,7 +7748,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 368
+      "position": 372
     },
     "metadata:duelyst_3-v1": {
       "id": "metadata:duelyst_3-v1",
@@ -7704,7 +7764,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 369
+      "position": 373
     },
     "metadata:duelyst_4-v1": {
       "id": "metadata:duelyst_4-v1",
@@ -7720,7 +7780,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 370
+      "position": 374
     },
     "metadata:duelyst_5-v1": {
       "id": "metadata:duelyst_5-v1",
@@ -7736,7 +7796,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 371
+      "position": 375
     },
     "metadata:duelyst_6-v1": {
       "id": "metadata:duelyst_6-v1",
@@ -7752,7 +7812,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 372
+      "position": 376
     },
     "metadata:duelyst_7-v1": {
       "id": "metadata:duelyst_7-v1",
@@ -7768,7 +7828,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 373
+      "position": 377
     },
     "metadata:elden-ring-recluse-v1": {
       "id": "metadata:elden-ring-recluse-v1",
@@ -7784,7 +7844,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 209
+      "position": 213
     },
     "metadata:elden-ring-wylder-v1": {
       "id": "metadata:elden-ring-wylder-v1",
@@ -7800,7 +7860,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 210
+      "position": 214
     },
     "metadata:enter-the-gungeon_1-v1": {
       "id": "metadata:enter-the-gungeon_1-v1",
@@ -7816,7 +7876,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 427
+      "position": 431
     },
     "metadata:eso_1-v1": {
       "id": "metadata:eso_1-v1",
@@ -7832,7 +7892,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 366
+      "position": 370
     },
     "metadata:evo-2025-v1": {
       "id": "metadata:evo-2025-v1",
@@ -7848,7 +7908,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 201
+      "position": 205
     },
     "metadata:extension-v1": {
       "id": "metadata:extension-v1",
@@ -7864,7 +7924,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 364
+      "position": 368
     },
     "metadata:firewatch_1-v1": {
       "id": "metadata:firewatch_1-v1",
@@ -7880,7 +7940,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 428
+      "position": 432
     },
     "metadata:founder-v0": {
       "id": "metadata:founder-v0",
@@ -7896,7 +7956,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 351
+      "position": 355
     },
     "metadata:fright-fest-2025-v1": {
       "id": "metadata:fright-fest-2025-v1",
@@ -7912,7 +7972,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 172
+      "position": 176
     },
     "metadata:frozen-cortext_1-v1": {
       "id": "metadata:frozen-cortext_1-v1",
@@ -7928,7 +7988,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 405
+      "position": 409
     },
     "metadata:frozen-synapse_1-v1": {
       "id": "metadata:frozen-synapse_1-v1",
@@ -7944,7 +8004,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 406
+      "position": 410
     },
     "metadata:game-developer-v1": {
       "id": "metadata:game-developer-v1",
@@ -7960,7 +8020,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 257
+      "position": 261
     },
     "metadata:gamerduo-v1": {
       "id": "metadata:gamerduo-v1",
@@ -7976,7 +8036,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 184
+      "position": 188
     },
     "metadata:gears-of-war-superfan-badge-v1": {
       "id": "metadata:gears-of-war-superfan-badge-v1",
@@ -7992,7 +8052,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 197
+      "position": 201
     },
     "metadata:getting-over-it_1-v1": {
       "id": "metadata:getting-over-it_1-v1",
@@ -8008,7 +8068,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 394
+      "position": 398
     },
     "metadata:getting-over-it_2-v1": {
       "id": "metadata:getting-over-it_2-v1",
@@ -8024,7 +8084,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 395
+      "position": 399
     },
     "metadata:gingko-leaf-v1": {
       "id": "metadata:gingko-leaf-v1",
@@ -8040,7 +8100,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 183
+      "position": 187
     },
     "metadata:glhf-pledge-v1": {
       "id": "metadata:glhf-pledge-v1",
@@ -8056,7 +8116,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 352
+      "position": 356
     },
     "metadata:glitchcon2020-v1": {
       "id": "metadata:glitchcon2020-v1",
@@ -8072,7 +8132,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 325
+      "position": 329
     },
     "metadata:global_mod-v1": {
       "id": "metadata:global_mod-v1",
@@ -8088,7 +8148,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 336
+      "position": 340
     },
     "metadata:gold-pixel-heart-v1": {
       "id": "metadata:gold-pixel-heart-v1",
@@ -8104,7 +8164,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 244
+      "position": 248
     },
     "metadata:gold-pixel-heart---together-for-good-24-v1": {
       "id": "metadata:gold-pixel-heart---together-for-good-24-v1",
@@ -8120,7 +8180,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 224
+      "position": 228
     },
     "metadata:gone-bananas-v1": {
       "id": "metadata:gone-bananas-v1",
@@ -8136,7 +8196,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 218
+      "position": 222
     },
     "metadata:gp-explorer-3-v1": {
       "id": "metadata:gp-explorer-3-v1",
@@ -8152,7 +8212,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 186
+      "position": 190
     },
     "metadata:heavy-bullets_1-v1": {
       "id": "metadata:heavy-bullets_1-v1",
@@ -8168,7 +8228,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 429
+      "position": 433
     },
     "metadata:hello_neighbor_1-v1": {
       "id": "metadata:hello_neighbor_1-v1",
@@ -8184,7 +8244,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 415
+      "position": 419
     },
     "metadata:hornet-v1": {
       "id": "metadata:hornet-v1",
@@ -8200,7 +8260,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 195
+      "position": 199
     },
     "metadata:hype-train-v1": {
       "id": "metadata:hype-train-v1",
@@ -8216,7 +8276,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 329
+      "position": 333
     },
     "metadata:hype-train-v2": {
       "id": "metadata:hype-train-v2",
@@ -8232,7 +8292,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 330
+      "position": 334
     },
     "metadata:innerspace_1-v1": {
       "id": "metadata:innerspace_1-v1",
@@ -8248,7 +8308,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 396
+      "position": 400
     },
     "metadata:innerspace_2-v1": {
       "id": "metadata:innerspace_2-v1",
@@ -8264,7 +8324,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 397
+      "position": 401
     },
     "metadata:jackbox-party-pack_1-v1": {
       "id": "metadata:jackbox-party-pack_1-v1",
@@ -8280,7 +8340,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 430
+      "position": 434
     },
     "metadata:kingdom-new-lands_1-v1": {
       "id": "metadata:kingdom-new-lands_1-v1",
@@ -8296,7 +8356,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 431
+      "position": 435
     },
     "metadata:la-velada-iv-v1": {
       "id": "metadata:la-velada-iv-v1",
@@ -8312,7 +8372,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 232
+      "position": 236
     },
     "metadata:la-velada-v-badge-v1": {
       "id": "metadata:la-velada-v-badge-v1",
@@ -8328,7 +8388,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 202
+      "position": 206
     },
     "metadata:league-of-legends-mid-season-invitational-2025---grey-v1": {
       "id": "metadata:league-of-legends-mid-season-invitational-2025---grey-v1",
@@ -8344,7 +8404,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 204
+      "position": 208
     },
     "metadata:league-of-legends-mid-season-invitational-2025---purple-v1": {
       "id": "metadata:league-of-legends-mid-season-invitational-2025---purple-v1",
@@ -8360,7 +8420,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 205
+      "position": 209
     },
     "metadata:legendus-v1": {
       "id": "metadata:legendus-v1",
@@ -8376,7 +8436,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 203
+      "position": 207
     },
     "metadata:lol-worlds-2025-v1": {
       "id": "metadata:lol-worlds-2025-v1",
@@ -8392,7 +8452,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 177
+      "position": 181
     },
     "metadata:low-v1": {
       "id": "metadata:low-v1",
@@ -8408,7 +8468,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 181
+      "position": 185
     },
     "metadata:marathon-reveal-runner-v1": {
       "id": "metadata:marathon-reveal-runner-v1",
@@ -8424,7 +8484,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 216
+      "position": 220
     },
     "metadata:mel-v1": {
       "id": "metadata:mel-v1",
@@ -8440,7 +8500,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 187
+      "position": 191
     },
     "metadata:minecraft-15th-anniversary-celebration-v1": {
       "id": "metadata:minecraft-15th-anniversary-celebration-v1",
@@ -8456,7 +8516,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 238
+      "position": 242
     },
     "metadata:moderator-v1": {
       "id": "metadata:moderator-v1",
@@ -8472,7 +8532,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 337
+      "position": 341
     },
     "metadata:moments-v1": {
       "id": "metadata:moments-v1",
@@ -8488,7 +8548,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 295
+      "position": 299
     },
     "metadata:moments-v10": {
       "id": "metadata:moments-v10",
@@ -8504,7 +8564,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 296
+      "position": 300
     },
     "metadata:moments-v11": {
       "id": "metadata:moments-v11",
@@ -8520,7 +8580,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 297
+      "position": 301
     },
     "metadata:moments-v12": {
       "id": "metadata:moments-v12",
@@ -8536,7 +8596,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 298
+      "position": 302
     },
     "metadata:moments-v13": {
       "id": "metadata:moments-v13",
@@ -8552,7 +8612,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 299
+      "position": 303
     },
     "metadata:moments-v14": {
       "id": "metadata:moments-v14",
@@ -8568,7 +8628,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 300
+      "position": 304
     },
     "metadata:moments-v15": {
       "id": "metadata:moments-v15",
@@ -8584,7 +8644,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 301
+      "position": 305
     },
     "metadata:moments-v16": {
       "id": "metadata:moments-v16",
@@ -8600,7 +8660,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 302
+      "position": 306
     },
     "metadata:moments-v17": {
       "id": "metadata:moments-v17",
@@ -8616,7 +8676,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 303
+      "position": 307
     },
     "metadata:moments-v18": {
       "id": "metadata:moments-v18",
@@ -8632,7 +8692,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 304
+      "position": 308
     },
     "metadata:moments-v19": {
       "id": "metadata:moments-v19",
@@ -8648,7 +8708,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 305
+      "position": 309
     },
     "metadata:moments-v2": {
       "id": "metadata:moments-v2",
@@ -8664,7 +8724,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 306
+      "position": 310
     },
     "metadata:moments-v20": {
       "id": "metadata:moments-v20",
@@ -8680,7 +8740,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 307
+      "position": 311
     },
     "metadata:moments-v3": {
       "id": "metadata:moments-v3",
@@ -8696,7 +8756,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 308
+      "position": 312
     },
     "metadata:moments-v4": {
       "id": "metadata:moments-v4",
@@ -8712,7 +8772,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 309
+      "position": 313
     },
     "metadata:moments-v5": {
       "id": "metadata:moments-v5",
@@ -8728,7 +8788,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 310
+      "position": 314
     },
     "metadata:moments-v6": {
       "id": "metadata:moments-v6",
@@ -8744,7 +8804,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 311
+      "position": 315
     },
     "metadata:moments-v7": {
       "id": "metadata:moments-v7",
@@ -8760,7 +8820,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 312
+      "position": 316
     },
     "metadata:moments-v8": {
       "id": "metadata:moments-v8",
@@ -8776,7 +8836,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 313
+      "position": 317
     },
     "metadata:moments-v9": {
       "id": "metadata:moments-v9",
@@ -8792,7 +8852,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 314
+      "position": 318
     },
     "metadata:no_audio-v1": {
       "id": "metadata:no_audio-v1",
@@ -8808,7 +8868,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 258
+      "position": 262
     },
     "metadata:no_video-v1": {
       "id": "metadata:no_video-v1",
@@ -8824,7 +8884,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 259
+      "position": 263
     },
     "metadata:okhlos_1-v1": {
       "id": "metadata:okhlos_1-v1",
@@ -8840,7 +8900,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 432
+      "position": 436
     },
     "metadata:overwatch-league-insider_1-v1": {
       "id": "metadata:overwatch-league-insider_1-v1",
@@ -8856,7 +8916,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 375
+      "position": 379
     },
     "metadata:overwatch-league-insider_2018B-v1": {
       "id": "metadata:overwatch-league-insider_2018B-v1",
@@ -8872,7 +8932,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 374
+      "position": 378
     },
     "metadata:overwatch-league-insider_2019A-v1": {
       "id": "metadata:overwatch-league-insider_2019A-v1",
@@ -8888,7 +8948,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 356
+      "position": 360
     },
     "metadata:overwatch-league-insider_2019A-v2": {
       "id": "metadata:overwatch-league-insider_2019A-v2",
@@ -8904,7 +8964,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 357
+      "position": 361
     },
     "metadata:overwatch-league-insider_2019B-v1": {
       "id": "metadata:overwatch-league-insider_2019B-v1",
@@ -8920,7 +8980,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 358
+      "position": 362
     },
     "metadata:overwatch-league-insider_2019B-v2": {
       "id": "metadata:overwatch-league-insider_2019B-v2",
@@ -8936,7 +8996,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 359
+      "position": 363
     },
     "metadata:overwatch-league-insider_2019B-v3": {
       "id": "metadata:overwatch-league-insider_2019B-v3",
@@ -8952,7 +9012,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 360
+      "position": 364
     },
     "metadata:overwatch-league-insider_2019B-v4": {
       "id": "metadata:overwatch-league-insider_2019B-v4",
@@ -8968,7 +9028,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 361
+      "position": 365
     },
     "metadata:overwatch-league-insider_2019B-v5": {
       "id": "metadata:overwatch-league-insider_2019B-v5",
@@ -8984,7 +9044,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 362
+      "position": 366
     },
     "metadata:partner-v1": {
       "id": "metadata:partner-v1",
@@ -9000,7 +9060,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 338
+      "position": 342
     },
     "metadata:path-of-exile-2-badge-v1": {
       "id": "metadata:path-of-exile-2-badge-v1",
@@ -9016,7 +9076,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 198
+      "position": 202
     },
     "metadata:pokemon-legends-z-a-chikorita-v1": {
       "id": "metadata:pokemon-legends-z-a-chikorita-v1",
@@ -9032,7 +9092,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 173
+      "position": 177
     },
     "metadata:pokemon-legends-z-a-tepig-v1": {
       "id": "metadata:pokemon-legends-z-a-tepig-v1",
@@ -9048,7 +9108,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 174
+      "position": 178
     },
     "metadata:pokemon-legends-z-a-totodile-v1": {
       "id": "metadata:pokemon-legends-z-a-totodile-v1",
@@ -9064,7 +9124,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 175
+      "position": 179
     },
     "metadata:power-rangers-v0": {
       "id": "metadata:power-rangers-v0",
@@ -9080,7 +9140,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 433
+      "position": 437
     },
     "metadata:power-rangers-v1": {
       "id": "metadata:power-rangers-v1",
@@ -9096,7 +9156,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 434
+      "position": 438
     },
     "metadata:power-rangers-v2": {
       "id": "metadata:power-rangers-v2",
@@ -9112,7 +9172,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 435
+      "position": 439
     },
     "metadata:power-rangers-v3": {
       "id": "metadata:power-rangers-v3",
@@ -9128,7 +9188,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 436
+      "position": 440
     },
     "metadata:power-rangers-v4": {
       "id": "metadata:power-rangers-v4",
@@ -9144,7 +9204,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 437
+      "position": 441
     },
     "metadata:power-rangers-v5": {
       "id": "metadata:power-rangers-v5",
@@ -9160,7 +9220,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 438
+      "position": 442
     },
     "metadata:power-rangers-v6": {
       "id": "metadata:power-rangers-v6",
@@ -9176,7 +9236,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 439
+      "position": 443
     },
     "metadata:predictions-vblue-1": {
       "id": "metadata:predictions-vblue-1",
@@ -9192,7 +9252,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 260
+      "position": 264
     },
     "metadata:predictions-vblue-10": {
       "id": "metadata:predictions-vblue-10",
@@ -9208,7 +9268,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 317
+      "position": 321
     },
     "metadata:predictions-vblue-2": {
       "id": "metadata:predictions-vblue-2",
@@ -9224,7 +9284,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 261
+      "position": 265
     },
     "metadata:predictions-vblue-3": {
       "id": "metadata:predictions-vblue-3",
@@ -9240,7 +9300,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 318
+      "position": 322
     },
     "metadata:predictions-vblue-4": {
       "id": "metadata:predictions-vblue-4",
@@ -9256,7 +9316,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 319
+      "position": 323
     },
     "metadata:predictions-vblue-5": {
       "id": "metadata:predictions-vblue-5",
@@ -9272,7 +9332,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 320
+      "position": 324
     },
     "metadata:predictions-vblue-6": {
       "id": "metadata:predictions-vblue-6",
@@ -9288,7 +9348,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 321
+      "position": 325
     },
     "metadata:predictions-vblue-7": {
       "id": "metadata:predictions-vblue-7",
@@ -9304,7 +9364,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 322
+      "position": 326
     },
     "metadata:predictions-vblue-8": {
       "id": "metadata:predictions-vblue-8",
@@ -9320,7 +9380,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 323
+      "position": 327
     },
     "metadata:predictions-vblue-9": {
       "id": "metadata:predictions-vblue-9",
@@ -9336,7 +9396,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 324
+      "position": 328
     },
     "metadata:predictions-vgray-1": {
       "id": "metadata:predictions-vgray-1",
@@ -9352,7 +9412,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 262
+      "position": 266
     },
     "metadata:predictions-vgray-2": {
       "id": "metadata:predictions-vgray-2",
@@ -9368,7 +9428,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 263
+      "position": 267
     },
     "metadata:predictions-vpink-1": {
       "id": "metadata:predictions-vpink-1",
@@ -9384,7 +9444,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 327
+      "position": 331
     },
     "metadata:predictions-vpink-2": {
       "id": "metadata:predictions-vpink-2",
@@ -9400,7 +9460,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 264
+      "position": 268
     },
     "metadata:premium-v1": {
       "id": "metadata:premium-v1",
@@ -9416,7 +9476,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 328
+      "position": 332
     },
     "metadata:psychonauts_1-v1": {
       "id": "metadata:psychonauts_1-v1",
@@ -9432,7 +9492,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 440
+      "position": 444
     },
     "metadata:purple-pixel-heart---together-for-good-24-v1": {
       "id": "metadata:purple-pixel-heart---together-for-good-24-v1",
@@ -9448,7 +9508,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 225
+      "position": 229
     },
     "metadata:raging-wolf-helm-v1": {
       "id": "metadata:raging-wolf-helm-v1",
@@ -9464,7 +9524,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 233
+      "position": 237
     },
     "metadata:raiden-v-directors-cut_1-v1": {
       "id": "metadata:raiden-v-directors-cut_1-v1",
@@ -9480,7 +9540,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 411
+      "position": 415
     },
     "metadata:rift_1-v1": {
       "id": "metadata:rift_1-v1",
@@ -9496,7 +9556,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 441
+      "position": 445
     },
     "metadata:rplace-2023-v1": {
       "id": "metadata:rplace-2023-v1",
@@ -9512,7 +9572,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 246
+      "position": 250
     },
     "metadata:ruby-pixel-heart---together-for-good-24-v1": {
       "id": "metadata:ruby-pixel-heart---together-for-good-24-v1",
@@ -9528,7 +9588,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 226
+      "position": 230
     },
     "metadata:sajam-slam-badge-v1": {
       "id": "metadata:sajam-slam-badge-v1",
@@ -9544,7 +9604,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 176
+      "position": 180
     },
     "metadata:samusoffer_beta-v0": {
       "id": "metadata:samusoffer_beta-v0",
@@ -9560,7 +9620,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 413
+      "position": 417
     },
     "metadata:share-the-love-v1": {
       "id": "metadata:share-the-love-v1",
@@ -9576,7 +9636,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 220
+      "position": 224
     },
     "metadata:social-sharing-v1": {
       "id": "metadata:social-sharing-v1",
@@ -9592,7 +9652,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 188
+      "position": 192
     },
     "metadata:social-sharing-v2": {
       "id": "metadata:social-sharing-v2",
@@ -9608,7 +9668,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 189
+      "position": 193
     },
     "metadata:social-sharing-v3": {
       "id": "metadata:social-sharing-v3",
@@ -9624,7 +9684,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 190
+      "position": 194
     },
     "metadata:sonic-racing-crossworlds-v1": {
       "id": "metadata:sonic-racing-crossworlds-v1",
@@ -9640,7 +9700,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 185
+      "position": 189
     },
     "metadata:speedons-5-badge-v1": {
       "id": "metadata:speedons-5-badge-v1",
@@ -9656,7 +9716,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 219
+      "position": 223
     },
     "metadata:staff-v1": {
       "id": "metadata:staff-v1",
@@ -9672,7 +9732,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 339
+      "position": 343
     },
     "metadata:starbound_1-v1": {
       "id": "metadata:starbound_1-v1",
@@ -9688,7 +9748,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 403
+      "position": 407
     },
     "metadata:strafe_1-v1": {
       "id": "metadata:strafe_1-v1",
@@ -9704,7 +9764,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 417
+      "position": 421
     },
     "metadata:stream-for-humanity-2-2025-v1": {
       "id": "metadata:stream-for-humanity-2-2025-v1",
@@ -9720,7 +9780,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 169
+      "position": 173
     },
     "metadata:streamer-awards-2024-v1": {
       "id": "metadata:streamer-awards-2024-v1",
@@ -9736,7 +9796,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 240
+      "position": 244
     },
     "metadata:sub-gift-leader-v1": {
       "id": "metadata:sub-gift-leader-v1",
@@ -9752,7 +9812,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 348
+      "position": 352
     },
     "metadata:sub-gift-leader-v2": {
       "id": "metadata:sub-gift-leader-v2",
@@ -9768,7 +9828,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 349
+      "position": 353
     },
     "metadata:sub-gift-leader-v3": {
       "id": "metadata:sub-gift-leader-v3",
@@ -9784,7 +9844,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 350
+      "position": 354
     },
     "metadata:sub-gifter-v1": {
       "id": "metadata:sub-gifter-v1",
@@ -9800,7 +9860,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 268
+      "position": 272
     },
     "metadata:sub-gifter-v10": {
       "id": "metadata:sub-gifter-v10",
@@ -9816,7 +9876,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 269
+      "position": 273
     },
     "metadata:sub-gifter-v100": {
       "id": "metadata:sub-gifter-v100",
@@ -9832,7 +9892,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 270
+      "position": 274
     },
     "metadata:sub-gifter-v1000": {
       "id": "metadata:sub-gifter-v1000",
@@ -9848,7 +9908,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 271
+      "position": 275
     },
     "metadata:sub-gifter-v150": {
       "id": "metadata:sub-gifter-v150",
@@ -9864,7 +9924,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 272
+      "position": 276
     },
     "metadata:sub-gifter-v200": {
       "id": "metadata:sub-gifter-v200",
@@ -9880,7 +9940,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 273
+      "position": 277
     },
     "metadata:sub-gifter-v2000": {
       "id": "metadata:sub-gifter-v2000",
@@ -9896,7 +9956,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 274
+      "position": 278
     },
     "metadata:sub-gifter-v25": {
       "id": "metadata:sub-gifter-v25",
@@ -9912,7 +9972,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 275
+      "position": 279
     },
     "metadata:sub-gifter-v250": {
       "id": "metadata:sub-gifter-v250",
@@ -9928,7 +9988,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 276
+      "position": 280
     },
     "metadata:sub-gifter-v300": {
       "id": "metadata:sub-gifter-v300",
@@ -9944,7 +10004,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 277
+      "position": 281
     },
     "metadata:sub-gifter-v3000": {
       "id": "metadata:sub-gifter-v3000",
@@ -9960,7 +10020,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 278
+      "position": 282
     },
     "metadata:sub-gifter-v350": {
       "id": "metadata:sub-gifter-v350",
@@ -9976,7 +10036,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 279
+      "position": 283
     },
     "metadata:sub-gifter-v400": {
       "id": "metadata:sub-gifter-v400",
@@ -9992,7 +10052,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 280
+      "position": 284
     },
     "metadata:sub-gifter-v4000": {
       "id": "metadata:sub-gifter-v4000",
@@ -10008,7 +10068,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 281
+      "position": 285
     },
     "metadata:sub-gifter-v450": {
       "id": "metadata:sub-gifter-v450",
@@ -10024,7 +10084,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 282
+      "position": 286
     },
     "metadata:sub-gifter-v5": {
       "id": "metadata:sub-gifter-v5",
@@ -10040,7 +10100,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 283
+      "position": 287
     },
     "metadata:sub-gifter-v50": {
       "id": "metadata:sub-gifter-v50",
@@ -10056,7 +10116,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 284
+      "position": 288
     },
     "metadata:sub-gifter-v500": {
       "id": "metadata:sub-gifter-v500",
@@ -10072,7 +10132,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 285
+      "position": 289
     },
     "metadata:sub-gifter-v5000": {
       "id": "metadata:sub-gifter-v5000",
@@ -10088,7 +10148,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 286
+      "position": 290
     },
     "metadata:sub-gifter-v550": {
       "id": "metadata:sub-gifter-v550",
@@ -10104,7 +10164,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 287
+      "position": 291
     },
     "metadata:sub-gifter-v600": {
       "id": "metadata:sub-gifter-v600",
@@ -10120,7 +10180,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 288
+      "position": 292
     },
     "metadata:sub-gifter-v650": {
       "id": "metadata:sub-gifter-v650",
@@ -10136,7 +10196,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 289
+      "position": 293
     },
     "metadata:sub-gifter-v700": {
       "id": "metadata:sub-gifter-v700",
@@ -10152,7 +10212,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 290
+      "position": 294
     },
     "metadata:sub-gifter-v750": {
       "id": "metadata:sub-gifter-v750",
@@ -10168,7 +10228,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 291
+      "position": 295
     },
     "metadata:sub-gifter-v800": {
       "id": "metadata:sub-gifter-v800",
@@ -10184,7 +10244,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 292
+      "position": 296
     },
     "metadata:sub-gifter-v850": {
       "id": "metadata:sub-gifter-v850",
@@ -10200,7 +10260,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 265
+      "position": 269
     },
     "metadata:sub-gifter-v900": {
       "id": "metadata:sub-gifter-v900",
@@ -10216,7 +10276,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 266
+      "position": 270
     },
     "metadata:sub-gifter-v950": {
       "id": "metadata:sub-gifter-v950",
@@ -10232,7 +10292,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 267
+      "position": 271
     },
     "metadata:subscriber-v0": {
       "id": "metadata:subscriber-v0",
@@ -10248,7 +10308,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 340
+      "position": 344
     },
     "metadata:subscriber-v1": {
       "id": "metadata:subscriber-v1",
@@ -10264,7 +10324,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 341
+      "position": 345
     },
     "metadata:subscriber-v2": {
       "id": "metadata:subscriber-v2",
@@ -10280,7 +10340,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 253
+      "position": 257
     },
     "metadata:subscriber-v3": {
       "id": "metadata:subscriber-v3",
@@ -10296,7 +10356,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 254
+      "position": 258
     },
     "metadata:subscriber-v4": {
       "id": "metadata:subscriber-v4",
@@ -10312,7 +10372,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 255
+      "position": 259
     },
     "metadata:subscriber-v5": {
       "id": "metadata:subscriber-v5",
@@ -10328,7 +10388,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 256
+      "position": 260
     },
     "metadata:subscriber-v6": {
       "id": "metadata:subscriber-v6",
@@ -10344,7 +10404,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 248
+      "position": 252
     },
     "metadata:subtember-2024-v1": {
       "id": "metadata:subtember-2024-v1",
@@ -10360,7 +10420,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 228
+      "position": 232
     },
     "metadata:subtember-2025-v1": {
       "id": "metadata:subtember-2025-v1",
@@ -10376,7 +10436,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 196
+      "position": 200
     },
     "metadata:superhot_1-v1": {
       "id": "metadata:superhot_1-v1",
@@ -10392,7 +10452,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 418
+      "position": 422
     },
     "metadata:superultracombo-2023-v1": {
       "id": "metadata:superultracombo-2023-v1",
@@ -10408,7 +10468,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 249
+      "position": 253
     },
     "metadata:survival-cup-4-v1": {
       "id": "metadata:survival-cup-4-v1",
@@ -10424,7 +10484,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 164
+      "position": 168
     },
     "metadata:the-first-descendant-badge-v1": {
       "id": "metadata:the-first-descendant-badge-v1",
@@ -10440,7 +10500,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 200
+      "position": 204
     },
     "metadata:the-game-awards-2023-v1": {
       "id": "metadata:the-game-awards-2023-v1",
@@ -10456,7 +10516,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 241
+      "position": 245
     },
     "metadata:the-golden-predictor-of-the-game-awards-2023-v1": {
       "id": "metadata:the-golden-predictor-of-the-game-awards-2023-v1",
@@ -10472,7 +10532,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 242
+      "position": 246
     },
     "metadata:the-man-without-fear-v1": {
       "id": "metadata:the-man-without-fear-v1",
@@ -10488,7 +10548,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 179
+      "position": 183
     },
     "metadata:the-onryos-mask-v1": {
       "id": "metadata:the-onryos-mask-v1",
@@ -10504,7 +10564,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 182
+      "position": 186
     },
     "metadata:the-surge_1-v1": {
       "id": "metadata:the-surge_1-v1",
@@ -10520,7 +10580,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 407
+      "position": 411
     },
     "metadata:the-surge_2-v1": {
       "id": "metadata:the-surge_2-v1",
@@ -10536,7 +10596,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 408
+      "position": 412
     },
     "metadata:the-surge_3-v1": {
       "id": "metadata:the-surge_3-v1",
@@ -10552,7 +10612,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 409
+      "position": 413
     },
     "metadata:this-war-of-mine_1-v1": {
       "id": "metadata:this-war-of-mine_1-v1",
@@ -10568,7 +10628,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 442
+      "position": 446
     },
     "metadata:titan-souls_1-v1": {
       "id": "metadata:titan-souls_1-v1",
@@ -10584,7 +10644,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 443
+      "position": 447
     },
     "metadata:together-for-good-25---good-badge-v1": {
       "id": "metadata:together-for-good-25---good-badge-v1",
@@ -10600,7 +10660,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 165
+      "position": 169
     },
     "metadata:together-for-good-25---gooder-badge-v1": {
       "id": "metadata:together-for-good-25---gooder-badge-v1",
@@ -10616,7 +10676,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 166
+      "position": 170
     },
     "metadata:together-for-good-25---goodest-badge-v1": {
       "id": "metadata:together-for-good-25---goodest-badge-v1",
@@ -10632,7 +10692,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 167
+      "position": 171
     },
     "metadata:together-for-good-25---wicked-dub-badge-v1": {
       "id": "metadata:together-for-good-25---wicked-dub-badge-v1",
@@ -10648,7 +10708,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 168
+      "position": 172
     },
     "metadata:touch-grass-v1": {
       "id": "metadata:touch-grass-v1",
@@ -10664,7 +10724,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 199
+      "position": 203
     },
     "metadata:treasure-adventure-world_1-v1": {
       "id": "metadata:treasure-adventure-world_1-v1",
@@ -10680,7 +10740,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 393
+      "position": 397
     },
     "metadata:turbo-v1": {
       "id": "metadata:turbo-v1",
@@ -10696,7 +10756,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 342
+      "position": 346
     },
     "metadata:twitch-dj-v1": {
       "id": "metadata:twitch-dj-v1",
@@ -10712,7 +10772,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 234
+      "position": 238
     },
     "metadata:twitch-intern-2022-v1": {
       "id": "metadata:twitch-intern-2022-v1",
@@ -10728,7 +10788,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 193
+      "position": 197
     },
     "metadata:twitch-intern-2023-v1": {
       "id": "metadata:twitch-intern-2023-v1",
@@ -10744,7 +10804,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 245
+      "position": 249
     },
     "metadata:twitch-intern-2024-v1": {
       "id": "metadata:twitch-intern-2024-v1",
@@ -10760,7 +10820,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 231
+      "position": 235
     },
     "metadata:twitch-recap-2023-v1": {
       "id": "metadata:twitch-recap-2023-v1",
@@ -10776,7 +10836,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 243
+      "position": 247
     },
     "metadata:twitch-recap-2024-v1": {
       "id": "metadata:twitch-recap-2024-v1",
@@ -10792,7 +10852,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 222
+      "position": 226
     },
     "metadata:twitchbot-v1": {
       "id": "metadata:twitchbot-v1",
@@ -10808,7 +10868,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 343
+      "position": 347
     },
     "metadata:twitchbot-v2": {
       "id": "metadata:twitchbot-v2",
@@ -10824,7 +10884,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 217
+      "position": 221
     },
     "metadata:twitchcon-2024---rotterdam-v1": {
       "id": "metadata:twitchcon-2024---rotterdam-v1",
@@ -10840,7 +10900,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 239
+      "position": 243
     },
     "metadata:twitchcon-2024---san-diego-v1": {
       "id": "metadata:twitchcon-2024---san-diego-v1",
@@ -10856,7 +10916,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 237
+      "position": 241
     },
     "metadata:twitchcon-2025---rotterdam-v1": {
       "id": "metadata:twitchcon-2025---rotterdam-v1",
@@ -10872,7 +10932,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 221
+      "position": 225
     },
     "metadata:twitchcon-referral-program-2025-bleedpurple-v1": {
       "id": "metadata:twitchcon-referral-program-2025-bleedpurple-v1",
@@ -10888,7 +10948,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 211
+      "position": 215
     },
     "metadata:twitchcon-referral-program-2025-chrome-star-v1": {
       "id": "metadata:twitchcon-referral-program-2025-chrome-star-v1",
@@ -10904,7 +10964,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 212
+      "position": 216
     },
     "metadata:twitchcon2017-v1": {
       "id": "metadata:twitchcon2017-v1",
@@ -10920,7 +10980,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 416
+      "position": 420
     },
     "metadata:twitchcon2018-v1": {
       "id": "metadata:twitchcon2018-v1",
@@ -10936,7 +10996,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 365
+      "position": 369
     },
     "metadata:twitchconAmsterdam2020-v1": {
       "id": "metadata:twitchconAmsterdam2020-v1",
@@ -10952,7 +11012,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 331
+      "position": 335
     },
     "metadata:twitchconEU2019-v1": {
       "id": "metadata:twitchconEU2019-v1",
@@ -10968,7 +11028,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 355
+      "position": 359
     },
     "metadata:twitchconEU2022-v1": {
       "id": "metadata:twitchconEU2022-v1",
@@ -10984,7 +11044,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 293
+      "position": 297
     },
     "metadata:twitchconEU2023-v1": {
       "id": "metadata:twitchconEU2023-v1",
@@ -11000,7 +11060,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 250
+      "position": 254
     },
     "metadata:twitchconNA2019-v1": {
       "id": "metadata:twitchconNA2019-v1",
@@ -11016,7 +11076,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 353
+      "position": 357
     },
     "metadata:twitchconNA2020-v1": {
       "id": "metadata:twitchconNA2020-v1",
@@ -11032,7 +11092,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 332
+      "position": 336
     },
     "metadata:twitchconNA2022-v1": {
       "id": "metadata:twitchconNA2022-v1",
@@ -11048,7 +11108,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 294
+      "position": 298
     },
     "metadata:twitchconNA2023-v1": {
       "id": "metadata:twitchconNA2023-v1",
@@ -11064,7 +11124,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 247
+      "position": 251
     },
     "metadata:tyranny_1-v1": {
       "id": "metadata:tyranny_1-v1",
@@ -11080,7 +11140,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 444
+      "position": 448
     },
     "metadata:user-anniversary-v1": {
       "id": "metadata:user-anniversary-v1",
@@ -11096,7 +11156,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 316
+      "position": 320
     },
     "metadata:vct-paris-2025-v1": {
       "id": "metadata:vct-paris-2025-v1",
@@ -11112,7 +11172,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 192
+      "position": 196
     },
     "metadata:vga-champ-2017-v1": {
       "id": "metadata:vga-champ-2017-v1",
@@ -11128,7 +11188,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 398
+      "position": 402
     },
     "metadata:video-games-day-v1": {
       "id": "metadata:video-games-day-v1",
@@ -11144,7 +11204,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 191
+      "position": 195
     },
     "metadata:vip-v1": {
       "id": "metadata:vip-v1",
@@ -11160,7 +11220,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 344
+      "position": 348
     },
     "metadata:warcraft-valliance": {
       "id": "metadata:warcraft-valliance",
@@ -11176,7 +11236,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 463
+      "position": 467
     },
     "metadata:warcraft-vhorde": {
       "id": "metadata:warcraft-vhorde",
@@ -11192,7 +11252,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 464
+      "position": 468
     },
     "metadata:zevent-2024-v1": {
       "id": "metadata:zevent-2024-v1",
@@ -11208,7 +11268,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 229
+      "position": 233
     },
     "metadata:zevent25-v1": {
       "id": "metadata:zevent25-v1",
@@ -11224,7 +11284,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 194
+      "position": 198
     },
     "metadata:rainbow-six-siege-x-10th-anniversary-v1": {
       "id": "metadata:rainbow-six-siege-x-10th-anniversary-v1",
@@ -11240,7 +11300,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 162
+      "position": 166
     },
     "metadata:streamer-awards-tux-v1": {
       "id": "metadata:streamer-awards-tux-v1",
@@ -11256,7 +11316,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 159
+      "position": 163
     },
     "metadata:twitch-recap-2025-v1": {
       "id": "metadata:twitch-recap-2025-v1",
@@ -11272,7 +11332,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 160
+      "position": 164
     },
     "metadata:ugly-sweater-v1": {
       "id": "metadata:ugly-sweater-v1",
@@ -11288,7 +11348,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 161
+      "position": 165
     },
     "metadata:revedtv-stream-awards-2025-v1": {
       "id": "metadata:revedtv-stream-awards-2025-v1",
@@ -11304,7 +11364,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 157
+      "position": 161
     },
     "metadata:total-war-anniversary-v1": {
       "id": "metadata:total-war-anniversary-v1",
@@ -11320,7 +11380,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 158
+      "position": 162
     },
     "metadata:k4sen-con-2025-v1": {
       "id": "metadata:k4sen-con-2025-v1",
@@ -11336,7 +11396,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 155
+      "position": 159
     },
     "metadata:rustmas-2025-v1": {
       "id": "metadata:rustmas-2025-v1",
@@ -11352,7 +11412,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 156
+      "position": 160
     },
     "metadata:jeff-the-land-shark-v1": {
       "id": "metadata:jeff-the-land-shark-v1",
@@ -11368,7 +11428,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 154
+      "position": 158
     },
     "metadata:lead_moderator-v1": {
       "id": "metadata:lead_moderator-v1",
@@ -11384,7 +11444,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 153
+      "position": 157
     },
     "metadata:007-gun-barrel-v1": {
       "id": "metadata:007-gun-barrel-v1",
@@ -11400,7 +11460,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 72
+      "position": 76
     },
     "metadata:10-years-as-twitch-staff-v1": {
       "id": "metadata:10-years-as-twitch-staff-v1",
@@ -11416,7 +11476,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 144
+      "position": 148
     },
     "metadata:15-years-as-twitch-staff-v1": {
       "id": "metadata:15-years-as-twitch-staff-v1",
@@ -11432,7 +11492,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 145
+      "position": 149
     },
     "metadata:2026-bafta-games-awards-v1": {
       "id": "metadata:2026-bafta-games-awards-v1",
@@ -11448,7 +11508,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 100
+      "position": 104
     },
     "metadata:5-years-as-twitch-staff-v1": {
       "id": "metadata:5-years-as-twitch-staff-v1",
@@ -11464,7 +11524,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 146
+      "position": 150
     },
     "metadata:aang-v1": {
       "id": "metadata:aang-v1",
@@ -11480,7 +11540,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 126
+      "position": 130
     },
     "metadata:alterra-corporation-v1": {
       "id": "metadata:alterra-corporation-v1",
@@ -11496,7 +11556,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 71
+      "position": 75
     },
     "metadata:assassins-creed-black-flag-resynced-v1": {
       "id": "metadata:assassins-creed-black-flag-resynced-v1",
@@ -11512,7 +11572,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 55
+      "position": 59
     },
     "metadata:ayane-v1": {
       "id": "metadata:ayane-v1",
@@ -11528,7 +11588,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 30
+      "position": 34
     },
     "metadata:baby-chick-chat-badge-v1": {
       "id": "metadata:baby-chick-chat-badge-v1",
@@ -11544,7 +11604,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 101
+      "position": 105
     },
     "metadata:bingbonglove-v1": {
       "id": "metadata:bingbonglove-v1",
@@ -11560,7 +11620,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 132
+      "position": 136
     },
     "metadata:bloom-badge-v1": {
       "id": "metadata:bloom-badge-v1",
@@ -11576,7 +11636,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 103
+      "position": 107
     },
     "metadata:bloom-badge-v2": {
       "id": "metadata:bloom-badge-v2",
@@ -11592,7 +11652,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 104
+      "position": 108
     },
     "metadata:bloom-badge-v3": {
       "id": "metadata:bloom-badge-v3",
@@ -11608,7 +11668,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 105
+      "position": 109
     },
     "metadata:bloom-badge-v4": {
       "id": "metadata:bloom-badge-v4",
@@ -11624,7 +11684,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 106
+      "position": 110
     },
     "metadata:blossom-badge-v1": {
       "id": "metadata:blossom-badge-v1",
@@ -11640,7 +11700,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 47
+      "position": 51
     },
     "metadata:blossom-badge-v2": {
       "id": "metadata:blossom-badge-v2",
@@ -11656,7 +11716,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 48
+      "position": 52
     },
     "metadata:blossom-badge-v3": {
       "id": "metadata:blossom-badge-v3",
@@ -11672,7 +11732,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 49
+      "position": 53
     },
     "metadata:blossom-badge-v4": {
       "id": "metadata:blossom-badge-v4",
@@ -11688,7 +11748,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 50
+      "position": 54
     },
     "metadata:borderlands-4---c4sh-v1": {
       "id": "metadata:borderlands-4---c4sh-v1",
@@ -11704,7 +11764,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 110
+      "position": 114
     },
     "metadata:brawlhallawoo-v1": {
       "id": "metadata:brawlhallawoo-v1",
@@ -11720,7 +11780,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 76
+      "position": 80
     },
     "metadata:bubsy-4d-v1": {
       "id": "metadata:bubsy-4d-v1",
@@ -11736,7 +11796,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 70
+      "position": 74
     },
     "metadata:budz-v1": {
       "id": "metadata:budz-v1",
@@ -11752,7 +11812,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 11
+      "position": 15
     },
     "metadata:bungie-foundation-ally-v1": {
       "id": "metadata:bungie-foundation-ally-v1",
@@ -11768,7 +11828,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 138
+      "position": 142
     },
     "metadata:bungie-foundation-supporter-v1": {
       "id": "metadata:bungie-foundation-supporter-v1",
@@ -11784,7 +11844,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 139
+      "position": 143
     },
     "metadata:cdawg-cyclethon-5-badge-v1": {
       "id": "metadata:cdawg-cyclethon-5-badge-v1",
@@ -11800,7 +11860,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 102
+      "position": 106
     },
     "metadata:civ-vii---test-of-time-v1": {
       "id": "metadata:civ-vii---test-of-time-v1",
@@ -11816,7 +11876,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 77
+      "position": 81
     },
     "metadata:clair-obscur-expedition-33-one-year-anniversary-v1": {
       "id": "metadata:clair-obscur-expedition-33-one-year-anniversary-v1",
@@ -11832,7 +11892,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 95
+      "position": 99
     },
     "metadata:cool-cattiva-v1": {
       "id": "metadata:cool-cattiva-v1",
@@ -11848,7 +11908,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 31
+      "position": 35
     },
     "metadata:crash-v1": {
       "id": "metadata:crash-v1",
@@ -11864,7 +11924,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 81
+      "position": 85
     },
     "metadata:crimson-butterfly-v1": {
       "id": "metadata:crimson-butterfly-v1",
@@ -11880,7 +11940,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 116
+      "position": 120
     },
     "metadata:crimson-desert---crest-v1": {
       "id": "metadata:crimson-desert---crest-v1",
@@ -11896,7 +11956,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 111
+      "position": 115
     },
     "metadata:cryana-v1": {
       "id": "metadata:cryana-v1",
@@ -11912,7 +11972,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 96
+      "position": 100
     },
     "metadata:dead-by-daylight-icon-v1": {
       "id": "metadata:dead-by-daylight-icon-v1",
@@ -11928,7 +11988,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 56
+      "position": 60
     },
     "metadata:dead-by-daylight-pride-icon-v1": {
       "id": "metadata:dead-by-daylight-pride-icon-v1",
@@ -11944,7 +12004,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 9
+      "position": 13
     },
     "metadata:dead-by-daylight-x-jason-universe-v1": {
       "id": "metadata:dead-by-daylight-x-jason-universe-v1",
@@ -11960,7 +12020,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 57
+      "position": 61
     },
     "metadata:default-creator-campaign-reward-v1": {
       "id": "metadata:default-creator-campaign-reward-v1",
@@ -11976,7 +12036,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 82
+      "position": 86
     },
     "metadata:detroit-android-triangle-v1": {
       "id": "metadata:detroit-android-triangle-v1",
@@ -11992,7 +12052,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 51
+      "position": 55
     },
     "metadata:detroit-blue-led-v1": {
       "id": "metadata:detroit-blue-led-v1",
@@ -12008,7 +12068,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 52
+      "position": 56
     },
     "metadata:diablo-30th-anniversary-v1": {
       "id": "metadata:diablo-30th-anniversary-v1",
@@ -12024,7 +12084,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 133
+      "position": 137
     },
     "metadata:diana-v1": {
       "id": "metadata:diana-v1",
@@ -12040,7 +12100,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 147
+      "position": 151
     },
     "metadata:ditto-v1": {
       "id": "metadata:ditto-v1",
@@ -12056,7 +12116,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 117
+      "position": 121
     },
     "metadata:doa6lr-kasumi-v1": {
       "id": "metadata:doa6lr-kasumi-v1",
@@ -12072,7 +12132,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 46
+      "position": 50
     },
     "metadata:dodomogged-v1": {
       "id": "metadata:dodomogged-v1",
@@ -12088,7 +12148,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 97
+      "position": 101
     },
     "metadata:dream-beyond-v1": {
       "id": "metadata:dream-beyond-v1",
@@ -12104,7 +12164,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 28
+      "position": 32
     },
     "metadata:dreamers-v1": {
       "id": "metadata:dreamers-v1",
@@ -12120,7 +12180,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 21
+      "position": 25
     },
     "metadata:egg-v1": {
       "id": "metadata:egg-v1",
@@ -12136,7 +12196,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 8
+      "position": 12
     },
     "metadata:enchantedbigboiboxers-v1": {
       "id": "metadata:enchantedbigboiboxers-v1",
@@ -12152,7 +12212,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 4
+      "position": 8
     },
     "metadata:evo-las-vegas-2026-v1": {
       "id": "metadata:evo-las-vegas-2026-v1",
@@ -12168,7 +12228,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 43
+      "position": 47
     },
     "metadata:ewc-2026-bronze-v1": {
       "id": "metadata:ewc-2026-bronze-v1",
@@ -12184,7 +12244,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 37
+      "position": 41
     },
     "metadata:ewc-2026-co-streamer-bronze-v1": {
       "id": "metadata:ewc-2026-co-streamer-bronze-v1",
@@ -12200,7 +12260,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 13
+      "position": 17
     },
     "metadata:ewc-2026-co-streamer-diamond-v1": {
       "id": "metadata:ewc-2026-co-streamer-diamond-v1",
@@ -12216,7 +12276,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 14
+      "position": 18
     },
     "metadata:ewc-2026-co-streamer-gold-v1": {
       "id": "metadata:ewc-2026-co-streamer-gold-v1",
@@ -12232,7 +12292,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 15
+      "position": 19
     },
     "metadata:ewc-2026-co-streamer-platinum-v1": {
       "id": "metadata:ewc-2026-co-streamer-platinum-v1",
@@ -12248,7 +12308,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 16
+      "position": 20
     },
     "metadata:ewc-2026-co-streamer-silver-v1": {
       "id": "metadata:ewc-2026-co-streamer-silver-v1",
@@ -12264,7 +12324,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 17
+      "position": 21
     },
     "metadata:ewc-2026-co-streamer-ultraviolet-v1": {
       "id": "metadata:ewc-2026-co-streamer-ultraviolet-v1",
@@ -12280,7 +12340,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 18
+      "position": 22
     },
     "metadata:ewc-2026-diamond-v1": {
       "id": "metadata:ewc-2026-diamond-v1",
@@ -12296,7 +12356,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 38
+      "position": 42
     },
     "metadata:ewc-2026-gold-v1": {
       "id": "metadata:ewc-2026-gold-v1",
@@ -12312,7 +12372,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 39
+      "position": 43
     },
     "metadata:ewc-2026-platinum-v1": {
       "id": "metadata:ewc-2026-platinum-v1",
@@ -12328,7 +12388,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 40
+      "position": 44
     },
     "metadata:ewc-2026-silver-v1": {
       "id": "metadata:ewc-2026-silver-v1",
@@ -12344,7 +12404,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 41
+      "position": 45
     },
     "metadata:ewc-2026-ultraviolet-v1": {
       "id": "metadata:ewc-2026-ultraviolet-v1",
@@ -12360,7 +12420,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 42
+      "position": 46
     },
     "metadata:fallout-season-2-ghoul-v1": {
       "id": "metadata:fallout-season-2-ghoul-v1",
@@ -12376,7 +12436,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 142
+      "position": 146
     },
     "metadata:final-fantasy-xiv-fan-festival-2026-eu---content-unlock-quest-chat-v1": {
       "id": "metadata:final-fantasy-xiv-fan-festival-2026-eu---content-unlock-quest-chat-v1",
@@ -12392,7 +12452,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 89
+      "position": 93
     },
     "metadata:final-fantasy-xiv-fan-festival-2026-eu---moogle-chat-v1": {
       "id": "metadata:final-fantasy-xiv-fan-festival-2026-eu---moogle-chat-v1",
@@ -12408,7 +12468,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 90
+      "position": 94
     },
     "metadata:final-fantasy-xiv-fan-festival-2026-jp---alpha-chat-v1": {
       "id": "metadata:final-fantasy-xiv-fan-festival-2026-jp---alpha-chat-v1",
@@ -12424,7 +12484,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 91
+      "position": 95
     },
     "metadata:final-fantasy-xiv-fan-festival-2026-jp---quest-complete-chat-v1": {
       "id": "metadata:final-fantasy-xiv-fan-festival-2026-jp---quest-complete-chat-v1",
@@ -12440,7 +12500,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 92
+      "position": 96
     },
     "metadata:final-fantasy-xiv-fan-festival-2026-na---fat-cat-v1": {
       "id": "metadata:final-fantasy-xiv-fan-festival-2026-na---fat-cat-v1",
@@ -12456,7 +12516,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 86
+      "position": 90
     },
     "metadata:final-fantasy-xiv-fan-festival-2026-na---fat-cat-chat-v1": {
       "id": "metadata:final-fantasy-xiv-fan-festival-2026-na---fat-cat-chat-v1",
@@ -12472,7 +12532,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 93
+      "position": 97
     },
     "metadata:final-fantasy-xiv-fan-festival-2026-na---main-scenario-quest--v1": {
       "id": "metadata:final-fantasy-xiv-fan-festival-2026-na---main-scenario-quest--v1",
@@ -12488,7 +12548,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 87
+      "position": 91
     },
     "metadata:final-fantasy-xiv-fan-festival-2026-na---main-scenario-quest-chat-v1": {
       "id": "metadata:final-fantasy-xiv-fan-festival-2026-na---main-scenario-quest-chat-v1",
@@ -12504,7 +12564,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 94
+      "position": 98
     },
     "metadata:first-stand-2026-supporter-v1": {
       "id": "metadata:first-stand-2026-supporter-v1",
@@ -12520,7 +12580,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 113
+      "position": 117
     },
     "metadata:first-stand-2026-viewer-v1": {
       "id": "metadata:first-stand-2026-viewer-v1",
@@ -12536,7 +12596,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 112
+      "position": 116
     },
     "metadata:fischer-v1": {
       "id": "metadata:fischer-v1",
@@ -12552,7 +12612,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 130
+      "position": 134
     },
     "metadata:football-fest-2026-v1": {
       "id": "metadata:football-fest-2026-v1",
@@ -12568,7 +12628,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 59
+      "position": 63
     },
     "metadata:frog-lantern-v1": {
       "id": "metadata:frog-lantern-v1",
@@ -12584,7 +12644,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 148
+      "position": 152
     },
     "metadata:grey-zone-warfare-v1": {
       "id": "metadata:grey-zone-warfare-v1",
@@ -12600,7 +12660,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 44
+      "position": 48
     },
     "metadata:hime-v1": {
       "id": "metadata:hime-v1",
@@ -12616,7 +12676,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 79
+      "position": 83
     },
     "metadata:hotline-v1": {
       "id": "metadata:hotline-v1",
@@ -12632,7 +12692,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 24
+      "position": 28
     },
     "metadata:hulk-v1": {
       "id": "metadata:hulk-v1",
@@ -12648,7 +12708,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 7
+      "position": 11
     },
     "metadata:hunt-crosses-v1": {
       "id": "metadata:hunt-crosses-v1",
@@ -12664,7 +12724,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 149
+      "position": 153
     },
     "metadata:hypershot-celestial-v1": {
       "id": "metadata:hypershot-celestial-v1",
@@ -12680,7 +12740,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 127
+      "position": 131
     },
     "metadata:invincible-vs-v1": {
       "id": "metadata:invincible-vs-v1",
@@ -12696,7 +12756,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 88
+      "position": 92
     },
     "metadata:jasontheween-7-day-survival-v1": {
       "id": "metadata:jasontheween-7-day-survival-v1",
@@ -12712,7 +12772,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 131
+      "position": 135
     },
     "metadata:jubilee-v1": {
       "id": "metadata:jubilee-v1",
@@ -12728,7 +12788,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 29
+      "position": 33
     },
     "metadata:killer-inn-v1": {
       "id": "metadata:killer-inn-v1",
@@ -12744,7 +12804,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 32
+      "position": 36
     },
     "metadata:kodama-v1": {
       "id": "metadata:kodama-v1",
@@ -12760,7 +12820,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 137
+      "position": 141
     },
     "metadata:la-velada-vi-v1": {
       "id": "metadata:la-velada-vi-v1",
@@ -12776,7 +12836,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 12
+      "position": 16
     },
     "metadata:lamby-v1": {
       "id": "metadata:lamby-v1",
@@ -12792,7 +12852,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 140
+      "position": 144
     },
     "metadata:league-of-legends-classic-v1": {
       "id": "metadata:league-of-legends-classic-v1",
@@ -12808,7 +12868,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 3
+      "position": 7
     },
     "metadata:lego-batman-legacy-of-the-dark-knight-v1": {
       "id": "metadata:lego-batman-legacy-of-the-dark-knight-v1",
@@ -12824,7 +12884,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 73
+      "position": 77
     },
     "metadata:lost-ark-anniversary-v1": {
       "id": "metadata:lost-ark-anniversary-v1",
@@ -12840,7 +12900,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 134
+      "position": 138
     },
     "metadata:marathon-silkworm-v1": {
       "id": "metadata:marathon-silkworm-v1",
@@ -12856,7 +12916,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 121
+      "position": 125
     },
     "metadata:marathon-sub-burger-v1": {
       "id": "metadata:marathon-sub-burger-v1",
@@ -12872,7 +12932,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 122
+      "position": 126
     },
     "metadata:meccha-chameleon-v1": {
       "id": "metadata:meccha-chameleon-v1",
@@ -12888,7 +12948,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 19
+      "position": 23
     },
     "metadata:meltan-v1": {
       "id": "metadata:meltan-v1",
@@ -12904,7 +12964,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 33
+      "position": 37
     },
     "metadata:mint-v1": {
       "id": "metadata:mint-v1",
@@ -12920,7 +12980,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 34
+      "position": 38
     },
     "metadata:mod-founder-v1": {
       "id": "metadata:mod-founder-v1",
@@ -12936,7 +12996,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 68
+      "position": 72
     },
     "metadata:mr-raccoon-v1": {
       "id": "metadata:mr-raccoon-v1",
@@ -12952,7 +13012,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 123
+      "position": 127
     },
     "metadata:msi-2026-v1": {
       "id": "metadata:msi-2026-v1",
@@ -12968,7 +13028,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 45
+      "position": 49
     },
     "metadata:nasa-artemis-ii-v1": {
       "id": "metadata:nasa-artemis-ii-v1",
@@ -12984,7 +13044,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 107
+      "position": 111
     },
     "metadata:never-grave---witch-hat-v1": {
       "id": "metadata:never-grave---witch-hat-v1",
@@ -13000,7 +13060,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 118
+      "position": 122
     },
     "metadata:perlica-v1": {
       "id": "metadata:perlica-v1",
@@ -13016,7 +13076,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 35
+      "position": 39
     },
     "metadata:pogchamps-6-7-v1": {
       "id": "metadata:pogchamps-6-7-v1",
@@ -13032,7 +13092,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 99
+      "position": 103
     },
     "metadata:pokemon-30th-anniversary-v1": {
       "id": "metadata:pokemon-30th-anniversary-v1",
@@ -13048,7 +13108,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 124
+      "position": 128
     },
     "metadata:princessdonutbrown-v1": {
       "id": "metadata:princessdonutbrown-v1",
@@ -13064,7 +13124,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 5
+      "position": 9
     },
     "metadata:princessdonutpink-v1": {
       "id": "metadata:princessdonutpink-v1",
@@ -13080,7 +13140,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 6
+      "position": 10
     },
     "metadata:puacl2026-finals-charizard-v1": {
       "id": "metadata:puacl2026-finals-charizard-v1",
@@ -13096,7 +13156,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 108
+      "position": 112
     },
     "metadata:purple-noob-v1": {
       "id": "metadata:purple-noob-v1",
@@ -13112,7 +13172,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 143
+      "position": 147
     },
     "metadata:qsmp2-v1": {
       "id": "metadata:qsmp2-v1",
@@ -13128,7 +13188,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 114
+      "position": 118
     },
     "metadata:raider-icon-badge-v1": {
       "id": "metadata:raider-icon-badge-v1",
@@ -13144,7 +13204,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 150
+      "position": 154
     },
     "metadata:relink-fabicon-v1": {
       "id": "metadata:relink-fabicon-v1",
@@ -13160,7 +13220,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 36
+      "position": 40
     },
     "metadata:rematch-brazil-v1": {
       "id": "metadata:rematch-brazil-v1",
@@ -13176,7 +13236,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 62
+      "position": 66
     },
     "metadata:rematch-england-v1": {
       "id": "metadata:rematch-england-v1",
@@ -13192,7 +13252,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 63
+      "position": 67
     },
     "metadata:rematch-france-v1": {
       "id": "metadata:rematch-france-v1",
@@ -13208,7 +13268,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 64
+      "position": 68
     },
     "metadata:rematch-nations-cup-v1": {
       "id": "metadata:rematch-nations-cup-v1",
@@ -13224,7 +13284,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 65
+      "position": 69
     },
     "metadata:rematch-nations-cup-eng-v1": {
       "id": "metadata:rematch-nations-cup-eng-v1",
@@ -13240,7 +13300,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 66
+      "position": 70
     },
     "metadata:rematch-us-v1": {
       "id": "metadata:rematch-us-v1",
@@ -13256,7 +13316,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 67
+      "position": 71
     },
     "metadata:resonance-minotaur-v1": {
       "id": "metadata:resonance-minotaur-v1",
@@ -13272,7 +13332,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 0
+      "position": 4
     },
     "metadata:road-to-twitchcon-26-v1": {
       "id": "metadata:road-to-twitchcon-26-v1",
@@ -13288,7 +13348,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 74
+      "position": 78
     },
     "metadata:rudy-v1": {
       "id": "metadata:rudy-v1",
@@ -13304,7 +13364,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 115
+      "position": 119
     },
     "metadata:runescape-dragon-dagger-v1": {
       "id": "metadata:runescape-dragon-dagger-v1",
@@ -13320,7 +13380,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 60
+      "position": 64
     },
     "metadata:runescape-skull-v1": {
       "id": "metadata:runescape-skull-v1",
@@ -13336,7 +13396,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 61
+      "position": 65
     },
     "metadata:sand-v1": {
       "id": "metadata:sand-v1",
@@ -13352,7 +13412,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 20
+      "position": 24
     },
     "metadata:scampuss-v1": {
       "id": "metadata:scampuss-v1",
@@ -13368,7 +13428,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 135
+      "position": 139
     },
     "metadata:seeks-eye-v1": {
       "id": "metadata:seeks-eye-v1",
@@ -13384,7 +13444,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 128
+      "position": 132
     },
     "metadata:skulls-10th-anniversary-v1": {
       "id": "metadata:skulls-10th-anniversary-v1",
@@ -13400,7 +13460,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 75
+      "position": 79
     },
     "metadata:speedons-6-v1": {
       "id": "metadata:speedons-6-v1",
@@ -13416,7 +13476,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 83
+      "position": 87
     },
     "metadata:spiderman-v1": {
       "id": "metadata:spiderman-v1",
@@ -13432,7 +13492,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 10
+      "position": 14
     },
     "metadata:star-force-mega-man-v1": {
       "id": "metadata:star-force-mega-man-v1",
@@ -13448,7 +13508,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 109
+      "position": 113
     },
     "metadata:support-a-streamer-ho26-badge-v1": {
       "id": "metadata:support-a-streamer-ho26-badge-v1",
@@ -13464,7 +13524,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 151
+      "position": 155
     },
     "metadata:team-instinct-v1": {
       "id": "metadata:team-instinct-v1",
@@ -13480,7 +13540,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 25
+      "position": 29
     },
     "metadata:team-mystic-v1": {
       "id": "metadata:team-mystic-v1",
@@ -13496,7 +13556,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 26
+      "position": 30
     },
     "metadata:team-valor-v1": {
       "id": "metadata:team-valor-v1",
@@ -13512,7 +13572,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 27
+      "position": 31
     },
     "metadata:tft-paris-open-v1": {
       "id": "metadata:tft-paris-open-v1",
@@ -13528,7 +13588,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 152
+      "position": 156
     },
     "metadata:the-blood-of-dawnwalker-launch-v1": {
       "id": "metadata:the-blood-of-dawnwalker-launch-v1",
@@ -13544,7 +13604,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 1
+      "position": 5
     },
     "metadata:the-blood-of-dawnwalker-supporter-v1": {
       "id": "metadata:the-blood-of-dawnwalker-supporter-v1",
@@ -13560,7 +13620,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 2
+      "position": 6
     },
     "metadata:the-deer-v1": {
       "id": "metadata:the-deer-v1",
@@ -13576,7 +13636,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 129
+      "position": 133
     },
     "metadata:toxic-zombie-v1": {
       "id": "metadata:toxic-zombie-v1",
@@ -13592,7 +13652,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 125
+      "position": 129
     },
     "metadata:twitchcon-2026---san-diego---beachball-v1": {
       "id": "metadata:twitchcon-2026---san-diego---beachball-v1",
@@ -13608,7 +13668,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 22
+      "position": 26
     },
     "metadata:twitchcon-2026---san-diego---taco-v1": {
       "id": "metadata:twitchcon-2026---san-diego---taco-v1",
@@ -13624,7 +13684,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 23
+      "position": 27
     },
     "metadata:twitchcon-2026-europe-row-houses-v1": {
       "id": "metadata:twitchcon-2026-europe-row-houses-v1",
@@ -13640,7 +13700,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 119
+      "position": 123
     },
     "metadata:twitchcon-2026-europe-windmill-v1": {
       "id": "metadata:twitchcon-2026-europe-windmill-v1",
@@ -13656,7 +13716,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 120
+      "position": 124
     },
     "metadata:two-point-museum-v1": {
       "id": "metadata:two-point-museum-v1",
@@ -13672,7 +13732,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 53
+      "position": 57
     },
     "metadata:two-point-pickle-v1": {
       "id": "metadata:two-point-pickle-v1",
@@ -13688,7 +13748,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 54
+      "position": 58
     },
     "metadata:umbrella-corporation-v1": {
       "id": "metadata:umbrella-corporation-v1",
@@ -13704,7 +13764,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 141
+      "position": 145
     },
     "metadata:unicorn-tachanka-v1": {
       "id": "metadata:unicorn-tachanka-v1",
@@ -13720,7 +13780,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 85
+      "position": 89
     },
     "metadata:waterslug-v1": {
       "id": "metadata:waterslug-v1",
@@ -13736,7 +13796,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 78
+      "position": 82
     },
     "metadata:went-outside-v1": {
       "id": "metadata:went-outside-v1",
@@ -13752,7 +13812,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 84
+      "position": 88
     },
     "metadata:wholesome-direct-2026-v1": {
       "id": "metadata:wholesome-direct-2026-v1",
@@ -13768,7 +13828,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 69
+      "position": 73
     },
     "metadata:winston-overwatch-v1": {
       "id": "metadata:winston-overwatch-v1",
@@ -13784,7 +13844,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 98
+      "position": 102
     },
     "metadata:yellow-noob-v1": {
       "id": "metadata:yellow-noob-v1",
@@ -13800,7 +13860,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 136
+      "position": 140
     },
     "metadata:you-got-this-v1": {
       "id": "metadata:you-got-this-v1",
@@ -13816,7 +13876,7 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 58
+      "position": 62
     },
     "metadata:yuzu-v1": {
       "id": "metadata:yuzu-v1",
@@ -13832,7 +13892,71 @@
         "source": "badgebase",
         "version": 2
       },
-      "position": 80
+      "position": 84
+    },
+    "metadata:bulbasaur-v1": {
+      "id": "metadata:bulbasaur-v1",
+      "cache_type": "badge",
+      "data": {
+        "date_added": "17 August 2026",
+        "usage_stats": null,
+        "more_info": null
+      },
+      "metadata": {
+        "timestamp": 1787034308,
+        "expiry_days": 0,
+        "source": "badgebase",
+        "version": 2
+      },
+      "position": 0
+    },
+    "metadata:charmander-v1": {
+      "id": "metadata:charmander-v1",
+      "cache_type": "badge",
+      "data": {
+        "date_added": "17 August 2026",
+        "usage_stats": null,
+        "more_info": null
+      },
+      "metadata": {
+        "timestamp": 1787034308,
+        "expiry_days": 0,
+        "source": "badgebase",
+        "version": 2
+      },
+      "position": 1
+    },
+    "metadata:pichu-v1": {
+      "id": "metadata:pichu-v1",
+      "cache_type": "badge",
+      "data": {
+        "date_added": "17 August 2026",
+        "usage_stats": null,
+        "more_info": null
+      },
+      "metadata": {
+        "timestamp": 1787034309,
+        "expiry_days": 0,
+        "source": "badgebase",
+        "version": 2
+      },
+      "position": 2
+    },
+    "metadata:squirtle-v1": {
+      "id": "metadata:squirtle-v1",
+      "cache_type": "badge",
+      "data": {
+        "date_added": "17 August 2026",
+        "usage_stats": null,
+        "more_info": null
+      },
+      "metadata": {
+        "timestamp": 1787034310,
+        "expiry_days": 0,
+        "source": "badgebase",
+        "version": 2
+      },
+      "position": 3
     }
   }
 }
