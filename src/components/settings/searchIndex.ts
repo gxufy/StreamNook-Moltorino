@@ -1160,6 +1160,13 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
     tab: 'Integrations',
     section: 'Chat Runtime',
     sectionId: 'settings-section-moltorino',
+    title: 'Runtime version and management',
+    description: 'View the installed Bluzyrino version, runtime manifest validity, StreamNook managed status, and runtime update eligibility.'
+  },
+  {
+    tab: 'Integrations',
+    section: 'Chat Runtime',
+    sectionId: 'settings-section-moltorino',
     title: 'Custom chat executable',
     description: 'Override bundled Bluzyrino with a compatible executable. Browse for Bluzyrino.exe, Moltorino7.exe, or another compatible exe; runtime status, custom path.'
   },

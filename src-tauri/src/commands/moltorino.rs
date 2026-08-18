@@ -698,7 +698,7 @@ pub(crate) fn resolve_moltorino_runtime(
 }
 
 /// Read-only view of runtime resolution. The first four fields are the legacy
-/// contract; `runtime_kind` and `display_name` add presentation metadata.
+/// contract; all newer fields are additive presentation and updater-trust metadata.
 #[derive(Serialize, Clone)]
 pub struct ChatRuntimeStatus {
     pub available: bool,
@@ -708,6 +708,11 @@ pub struct ChatRuntimeStatus {
     pub error: Option<String>,
     pub runtime_kind: Option<String>,
     pub display_name: Option<String>,
+    /// Present only for a fully validated bundled Bluzyrino manifest.
+    pub installed_version: Option<String>,
+    pub manifest_valid: bool,
+    pub managed_by_streamnook: bool,
+    pub updater_eligible: bool,
 }
 
 /// Compatibility type name for Rust callers; serialization is unchanged.
@@ -715,14 +720,40 @@ pub type MoltorinoRuntimeStatus = ChatRuntimeStatus;
 
 fn runtime_status_for(configured: &str, exe_dir: &Path) -> ChatRuntimeStatus {
     match resolve_runtime_in(configured, exe_dir) {
-        Ok(runtime) => ChatRuntimeStatus {
-            available: true,
-            source: Some(runtime.source_status().to_string()),
-            executable_path: Some(display_path(&runtime.executable_path)),
-            error: None,
-            runtime_kind: Some(runtime.runtime_kind_status().to_string()),
-            display_name: Some(runtime.identity().display_name().to_string()),
-        },
+        Ok(runtime) => {
+            let installed = if runtime.kind == ChatRuntimeKind::BundledBluzyrino {
+                let runtime_root = runtime
+                    .executable_path
+                    .parent()
+                    .unwrap_or_else(|| Path::new(""));
+                match super::chat_runtime_update::validate_installed_runtime(runtime_root) {
+                    Ok(validated) => Some(validated),
+                    Err(error) => {
+                        // Resolution and launch compatibility remain existence-based. A
+                        // bad manifest removes updater trust, not runtime availability.
+                        log::warn!(
+                            "[ChatRuntime] bundled Bluzyrino manifest is invalid; managed updates disabled: {error}"
+                        );
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+            let manifest_valid = installed.is_some();
+            ChatRuntimeStatus {
+                available: true,
+                source: Some(runtime.source_status().to_string()),
+                executable_path: Some(display_path(&runtime.executable_path)),
+                error: None,
+                runtime_kind: Some(runtime.runtime_kind_status().to_string()),
+                display_name: Some(runtime.identity().display_name().to_string()),
+                installed_version: installed.map(|runtime| runtime.version),
+                manifest_valid,
+                managed_by_streamnook: manifest_valid,
+                updater_eligible: manifest_valid,
+            }
+        }
         Err(e) => ChatRuntimeStatus {
             available: false,
             source: None,
@@ -730,6 +761,10 @@ fn runtime_status_for(configured: &str, exe_dir: &Path) -> ChatRuntimeStatus {
             error: Some(e),
             runtime_kind: None,
             display_name: None,
+            installed_version: None,
+            manifest_valid: false,
+            managed_by_streamnook: false,
+            updater_eligible: false,
         },
     }
 }
@@ -760,7 +795,13 @@ pub async fn chat_runtime_status(
     state: tauri::State<'_, crate::models::settings::AppState>,
 ) -> Result<ChatRuntimeStatus, String> {
     let configured = configured_runtime_path(&state)?;
-    Ok(runtime_status_for(&configured, &current_exe_dir()?))
+    let exe_dir = current_exe_dir()?;
+    // A complete bundle validation hashes every payload file. Keep that blocking
+    // filesystem work off Tauri's async executor while preserving the same
+    // read-only resolver/status implementation used by tests.
+    tokio::task::spawn_blocking(move || runtime_status_for(&configured, &exe_dir))
+        .await
+        .map_err(|e| format!("Couldn't validate the chat runtime: {e}"))
 }
 
 #[tauri::command]
@@ -904,6 +945,7 @@ mod tests {
         legacy_bundled_moltorino_path, resolve_executable, resolve_runtime_in,
         runtime_status_for, ChatRuntimeIdentity, ChatRuntimeKind,
     };
+    use sha2::{Digest, Sha256};
     use std::path::Path;
 
     /// A unique temp directory for one test, plus a helper to drop a real
@@ -938,12 +980,49 @@ mod tests {
 
         /// Write a file (any bytes) at a relative path, creating parents.
         fn file(&self, rel: &str) -> std::path::PathBuf {
+            self.file_with(rel, b"probe")
+        }
+
+        fn file_with(&self, rel: &str, bytes: &[u8]) -> std::path::PathBuf {
             let p = self.root.join(rel);
             if let Some(parent) = p.parent() {
                 std::fs::create_dir_all(parent).expect("create temp file parent");
             }
-            std::fs::write(&p, b"probe").expect("write temp file");
+            std::fs::write(&p, bytes).expect("write temp file");
             p
+        }
+
+        fn valid_bluzyrino_bundle(&self) {
+            let exe = b"bundled-bluzyrino";
+            let support = b"qt-platform";
+            self.file_with("app/chat-runtime/Bluzyrino.exe", exe);
+            self.file_with("app/chat-runtime/platforms/qwindows.dll", support);
+            let manifest = serde_json::json!({
+                "runtime_id": "bluzyrino",
+                "version": "2.0.3",
+                "entrypoint": "Bluzyrino.exe",
+                "architecture": "x86_64",
+                "generated_utc": "2026-08-11T03:20:03Z",
+                "archive_root": "chat-runtime",
+                "file_count": 2,
+                "total_size_bytes": exe.len() + support.len(),
+                "files": [
+                    {
+                        "path": "Bluzyrino.exe",
+                        "size": exe.len(),
+                        "sha256": format!("{:x}", Sha256::digest(exe)),
+                    },
+                    {
+                        "path": "platforms/qwindows.dll",
+                        "size": support.len(),
+                        "sha256": format!("{:x}", Sha256::digest(support)),
+                    }
+                ]
+            });
+            self.file_with(
+                "app/chat-runtime/runtime-manifest.json",
+                &serde_json::to_vec_pretty(&manifest).expect("serialize runtime manifest"),
+            );
         }
     }
 
@@ -1129,6 +1208,81 @@ mod tests {
         let bundled_status = runtime_status_for("", &exe_dir);
         assert_eq!(bundled_status.source.as_deref(), Some("bundled"));
         assert_eq!(bundled_status.runtime_kind.as_deref(), Some("bundled_bluzyrino"));
+    }
+
+    #[test]
+    fn valid_bundled_status_is_versioned_managed_and_eligible() {
+        let tree = TempTree::new("managed_bundle");
+        let exe_dir = tree.dir("app");
+        tree.valid_bluzyrino_bundle();
+
+        let status = runtime_status_for("", &exe_dir);
+        assert!(status.available);
+        assert_eq!(status.installed_version.as_deref(), Some("2.0.3"));
+        assert!(status.manifest_valid);
+        assert!(status.managed_by_streamnook);
+        assert!(status.updater_eligible);
+    }
+
+    #[test]
+    fn missing_or_invalid_bundled_manifest_stays_available_but_ineligible() {
+        let missing = TempTree::new("missing_bundle_manifest");
+        let missing_exe_dir = missing.dir("app");
+        missing.file("app/chat-runtime/Bluzyrino.exe");
+        let missing_status = runtime_status_for("", &missing_exe_dir);
+        assert!(missing_status.available);
+        assert_eq!(
+            missing_status.runtime_kind.as_deref(),
+            Some("bundled_bluzyrino")
+        );
+        assert_eq!(missing_status.installed_version, None);
+        assert!(!missing_status.manifest_valid);
+        assert!(!missing_status.managed_by_streamnook);
+        assert!(!missing_status.updater_eligible);
+
+        let invalid = TempTree::new("invalid_bundle_manifest");
+        let invalid_exe_dir = invalid.dir("app");
+        invalid.valid_bluzyrino_bundle();
+        invalid.file_with("app/chat-runtime/Bluzyrino.exe", b"tampered");
+        let invalid_status = runtime_status_for("", &invalid_exe_dir);
+        assert!(invalid_status.available);
+        assert_eq!(invalid_status.installed_version, None);
+        assert!(!invalid_status.manifest_valid);
+        assert!(!invalid_status.updater_eligible);
+    }
+
+    #[test]
+    fn custom_runtime_is_unmanaged_and_ineligible_even_with_valid_bundle() {
+        let tree = TempTree::new("custom_unmanaged");
+        let exe_dir = tree.dir("app");
+        tree.valid_bluzyrino_bundle();
+        let custom = tree.file("custom/Bluzyrino.exe");
+
+        let status = runtime_status_for(&custom.to_string_lossy(), &exe_dir);
+        assert!(status.available);
+        assert_eq!(status.runtime_kind.as_deref(), Some("custom_bluzyrino"));
+        assert_eq!(status.installed_version, None);
+        assert!(!status.manifest_valid);
+        assert!(!status.managed_by_streamnook);
+        assert!(!status.updater_eligible);
+    }
+
+    #[test]
+    fn legacy_bundled_moltorino_is_unmanaged_and_ineligible() {
+        let tree = TempTree::new("legacy_unmanaged");
+        let exe_dir = tree.dir("app");
+        tree.file("app/moltorino/Moltorino7.exe");
+
+        let status = runtime_status_for("", &exe_dir);
+        assert!(status.available);
+        assert_eq!(
+            status.runtime_kind.as_deref(),
+            Some("legacy_bundled_moltorino")
+        );
+        assert_eq!(status.installed_version, None);
+        assert!(!status.manifest_valid);
+        assert!(!status.managed_by_streamnook);
+        assert!(!status.updater_eligible);
     }
 
     #[test]

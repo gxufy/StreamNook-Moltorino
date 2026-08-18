@@ -28,6 +28,10 @@ interface ChatRuntimeStatus {
   error: string | null;
   runtime_kind: ChatRuntimeKind | null;
   display_name: string | null;
+  installed_version: string | null;
+  manifest_valid: boolean;
+  managed_by_streamnook: boolean;
+  updater_eligible: boolean;
 }
 
 // Module scope, not inside the render body: a nested component definition gets a
@@ -86,6 +90,10 @@ const IntegrationsSettings = () => {
             error: String(e),
             runtime_kind: null,
             display_name: null,
+            installed_version: null,
+            manifest_valid: false,
+            managed_by_streamnook: false,
+            updater_eligible: false,
           });
       });
     return () => {
@@ -263,6 +271,41 @@ const IntegrationsSettings = () => {
                     <span className="text-textMuted"> — {runtime.executable_path}</span>
                   )}
                 </span>
+              </div>
+            )}
+
+            {runtime?.available && (
+              <div className="rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-[12px] leading-relaxed">
+                {runtime.runtime_kind === 'bundled_bluzyrino' ? (
+                  <>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="text-textSecondary">
+                        Installed version:{' '}
+                        <span className="font-medium text-textPrimary">
+                          {runtime.installed_version ?? 'Unavailable'}
+                        </span>
+                      </span>
+                      <span className={runtime.manifest_valid ? 'text-emerald-400' : 'text-red-400'}>
+                        Manifest {runtime.manifest_valid ? 'valid' : 'invalid'}
+                      </span>
+                    </div>
+                    <div
+                      className={`mt-1 ${
+                        runtime.managed_by_streamnook && runtime.updater_eligible
+                          ? 'text-emerald-400'
+                          : 'text-textMuted'
+                      }`}
+                    >
+                      {runtime.managed_by_streamnook && runtime.updater_eligible
+                        ? 'Managed by StreamNook'
+                        : 'Bundled runtime is not eligible for managed updates'}
+                    </div>
+                  </>
+                ) : runtime.runtime_kind === 'legacy_bundled_moltorino' ? (
+                  <span className="text-textMuted">Legacy bundled Moltorino is not managed by the Chat Runtime updater.</span>
+                ) : (
+                  <span className="text-textMuted">Custom runtime not managed.</span>
+                )}
               </div>
             )}
 
