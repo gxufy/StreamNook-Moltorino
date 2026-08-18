@@ -59,6 +59,7 @@ import { handleSeventvEmoteSetUpdate, handleSeventvCosmeticUpdate, type EmoteSet
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import { getLogicalInnerSize, clampToWorkArea } from './utils/windowSizing';
+import { getPlayerFullscreenSnapshot } from './utils/windowFullscreen';
 import { getThemeById, applyTheme, DEFAULT_THEME_ID, getThemeByIdWithCustom, applyGlassStrength, DEFAULT_GLASS_TRANSPARENCY, applyFont, DEFAULT_FONT_ID, OLED_THEME_ID, getOledTheme } from './themes';
 import { getSelectedCompactViewPreset } from './constants/compactViewPresets';
 
@@ -88,6 +89,11 @@ const DEFAULT_CHAT_HEIGHT = 200; // For 'bottom' placement
 // Bumped to -v2 when the saved value switched from physical to logical pixels.
 // A stale physical value replayed as a LogicalSize would reopen the app oversized.
 const COMPACT_SAVED_SIZE_KEY = 'streamnook-compact-saved-size-v2';
+
+const isPlayerFullscreenBusy = (): boolean => {
+  const fullscreen = getPlayerFullscreenSnapshot();
+  return fullscreen.active || fullscreen.transitioning;
+};
 
 /** Window geometry captured on the way into Compact View. `maximized` is the
  *  state the window was in, not a size: restoring a maximized window by pixel
@@ -391,6 +397,7 @@ function App() {
 
           const clamped = await clampToWorkArea(newWidth, newHeight);
           if (Math.abs(size.width - clamped.width) > 5 || Math.abs(size.height - clamped.height) > 5) {
+            if (isPlayerFullscreenBusy()) return;
             selfResizeUntilRef.current = Date.now() + 300;
             await window.setSize(new LogicalSize(clamped.width, clamped.height));
           }
@@ -1284,6 +1291,7 @@ function App() {
   // Handle aspect ratio locking when setting changes or chat is resized
   useEffect(() => {
     const adjustWindowForAspectRatio = async () => {
+      if (isPlayerFullscreenBusy()) return;
       // Use refs for values that might be stale in closures
       const lockEnabled = aspectRatioLockEnabledRef.current;
       // When the current channel's chat is owned by a MultiChat popout, the
@@ -1383,6 +1391,7 @@ function App() {
         // Only resize if dimensions changed significantly (more than 5px difference)
         const clamped = await clampToWorkArea(newWidth, newHeight);
         if (Math.abs(width - clamped.width) > 5 || Math.abs(height - clamped.height) > 5) {
+          if (isPlayerFullscreenBusy()) return;
           Logger.debug('[AspectRatio] Resizing window to:', clamped.width, clamped.height);
           selfResizeUntilRef.current = Date.now() + 300;
           await window.setSize(new LogicalSize(clamped.width, clamped.height));
@@ -1412,6 +1421,7 @@ function App() {
     let unlistenFn: (() => void) | null = null;
 
     const adjustWindowForAspectRatio = async () => {
+      if (isPlayerFullscreenBusy()) return;
       // Use refs for current values
       const lockEnabled = aspectRatioLockEnabledRef.current;
       const chatHiddenByPopout = activeChatChannelInPopoutRef.current;
@@ -1488,6 +1498,7 @@ function App() {
 
         const clamped = await clampToWorkArea(newWidth, newHeight);
         if (Math.abs(width - clamped.width) > 5 || Math.abs(height - clamped.height) > 5) {
+          if (isPlayerFullscreenBusy()) return;
           Logger.debug('[AspectRatio] Resize event - adjusting to:', clamped.width, clamped.height);
           selfResizeUntilRef.current = Date.now() + 300;
           await window.setSize(new LogicalSize(clamped.width, clamped.height));

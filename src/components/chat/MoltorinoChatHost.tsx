@@ -21,6 +21,10 @@ import { useEffect, useLayoutEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Logger } from '../../utils/logger';
+import {
+  getPlayerFullscreenSnapshot,
+  subscribePlayerFullscreen,
+} from '../../utils/windowFullscreen';
 
 /// Event Rust emits when the embedded surface can't continue (Moltorino exited,
 /// or a create/attach failure) and the UI must fall back to native chat.
@@ -98,25 +102,34 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
     if (!el) return;
 
     let disposed = false;
+    const initialFullscreen = getPlayerFullscreenSnapshot();
+    let suppressed = initialFullscreen.active || initialFullscreen.transitioning;
 
-    const pushBounds = (b: Bounds) => {
+    const pushBounds = (b: Bounds, visible = b.visible) => {
       lastBounds.current = b;
       invoke('chat_runtime_embed_set_bounds', {
         x: b.x,
         y: b.y,
         width: b.w,
         height: b.h,
-        visible: b.visible,
+        visible,
       }).catch((e) => Logger.error('[Moltorino] set_bounds failed:', e));
+    };
+
+    const hideHost = () => {
+      const b = lastBounds.current ?? measure(el);
+      pushBounds(b, false);
     };
 
     // Measure and, only if something actually changed, report. Cheap enough to
     // call from a ResizeObserver, window resize, and a low-frequency safety poll
-    // (which covers layout shifts that don't resize the element itself).
-    const syncBounds = () => {
-      if (disposed || !placeholderRef.current) return;
+    // (which covers layout shifts that don't resize the element itself). While
+    // player fullscreen is active or transitioning, only the coordinator may
+    // touch visibility so a resize tick cannot re-show the native child.
+    const syncBounds = (force = false) => {
+      if (disposed || suppressed || !placeholderRef.current) return;
       const b = measure(placeholderRef.current);
-      if (!boundsEqual(lastBounds.current, b)) pushBounds(b);
+      if (force || !boundsEqual(lastBounds.current, b)) pushBounds(b);
     };
 
     // Initial start: create/reuse the host at the current bounds, following the
@@ -132,29 +145,47 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
         y: initial.y,
         width: initial.w,
         height: initial.h,
-        visible: initial.visible,
+        visible: initial.visible && !suppressed,
       }).catch((e) => {
         Logger.error('[Moltorino] embed start failed:', e);
         if (!disposed) onFallback(String(e));
       });
     } else {
-      // Remounted while the process still lives: just re-show at current bounds.
-      pushBounds(initial);
+      // Remounted while the process still lives: update its rectangle, but keep it
+      // hidden if a player-fullscreen transition already owns the window.
+      pushBounds(initial, initial.visible && !suppressed);
     }
 
-    const ro = new ResizeObserver(syncBounds);
+    const unsubscribeFullscreen = subscribePlayerFullscreen((next) => {
+      if (disposed) return;
+      const nextSuppressed = next.active || next.transitioning;
+      if (nextSuppressed) {
+        suppressed = true;
+        hideHost();
+      } else if (suppressed) {
+        suppressed = false;
+        // Fullscreen exit can restore a different window rectangle. Ignore all
+        // intermediate resize ticks above, then publish exactly one fresh box.
+        syncBounds(true);
+      }
+    });
+    if (suppressed) hideHost();
+
+    const ro = new ResizeObserver(() => syncBounds());
     ro.observe(el);
-    window.addEventListener('resize', syncBounds);
+    const onWindowResize = () => syncBounds();
+    window.addEventListener('resize', onWindowResize);
     // Safety net for moves that don't change the element's own size (dock
     // switches, sibling panels opening, Framer layout animations). Dedup makes
     // this a no-op whenever the box is static, so the IPC cost is only paid on
     // real change.
-    const poll = window.setInterval(syncBounds, 250);
+    const poll = window.setInterval(() => syncBounds(), 250);
 
     return () => {
       disposed = true;
+      unsubscribeFullscreen();
       ro.disconnect();
-      window.removeEventListener('resize', syncBounds);
+      window.removeEventListener('resize', onWindowResize);
       window.clearInterval(poll);
       // Hide (don't kill) the shared host so a later embeddable channel reuses it
       // instantly, and so an unsupported context never leaves the old channel on

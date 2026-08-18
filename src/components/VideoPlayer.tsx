@@ -1154,8 +1154,8 @@ const VideoPlayer = () => {
           playerRef.current = player;
           setPlayerReady(true);
 
-          player.on('enterfullscreen', () => syncTauriWindowFullscreen(true));
-          player.on('exitfullscreen', () => syncTauriWindowFullscreen(false));
+          player.on('enterfullscreen', () => syncTauriWindowFullscreen(true, 'main-player'));
+          player.on('exitfullscreen', () => syncTauriWindowFullscreen(false, 'main-player'));
 
           // Set up live stream overrides
           isLiveRef.current = useAppStore.getState().currentMediaType === 'live';
@@ -1617,8 +1617,8 @@ const VideoPlayer = () => {
       playerRef.current.volume = currentSettings.volume;
       playerRef.current.muted = currentSettings.muted;
 
-      player.on('enterfullscreen', () => syncTauriWindowFullscreen(true));
-      player.on('exitfullscreen', () => syncTauriWindowFullscreen(false));
+      player.on('enterfullscreen', () => syncTauriWindowFullscreen(true, 'main-player'));
+      player.on('exitfullscreen', () => syncTauriWindowFullscreen(false, 'main-player'));
 
       // Persist volume/muted changes back to settings (Safari path)
       player.on('volumechange', () => {

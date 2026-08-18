@@ -311,8 +311,8 @@ export const useMultiNookPlayer = ({
             storage: { enabled: false }
           });
 
-          playerRef.current.on('enterfullscreen', () => syncTauriWindowFullscreen(true));
-          playerRef.current.on('exitfullscreen', () => syncTauriWindowFullscreen(false));
+          playerRef.current.on('enterfullscreen', () => syncTauriWindowFullscreen(true, streamId));
+          playerRef.current.on('exitfullscreen', () => syncTauriWindowFullscreen(false, streamId));
 
           // Override duration for live stream progress bar
           Object.defineProperty(video, 'duration', {
@@ -474,8 +474,8 @@ export const useMultiNookPlayer = ({
             storage: { enabled: false }
           });
 
-          playerRef.current.on('enterfullscreen', () => syncTauriWindowFullscreen(true));
-          playerRef.current.on('exitfullscreen', () => syncTauriWindowFullscreen(false));
+          playerRef.current.on('enterfullscreen', () => syncTauriWindowFullscreen(true, streamId));
+          playerRef.current.on('exitfullscreen', () => syncTauriWindowFullscreen(false, streamId));
 
           Object.defineProperty(video, 'duration', {
             get: function () {
