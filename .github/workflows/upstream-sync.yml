@@ -44,7 +44,9 @@ jobs:
         id: compare
         shell: bash
         run: |
+          baseline_sha=$(git rev-parse "origin/${TARGET_BRANCH}")
           upstream_sha=$(git rev-parse upstream/main)
+          echo "baseline_sha=${baseline_sha}" >> "$GITHUB_OUTPUT"
           echo "upstream_sha=${upstream_sha}" >> "$GITHUB_OUTPUT"
 
           if git merge-base --is-ancestor upstream/main "origin/${TARGET_BRANCH}"; then
@@ -61,6 +63,7 @@ jobs:
           fi
 
       - name: Create or update the sync branch
+        id: candidate
         if: steps.compare.outputs.has_changes == 'true'
         shell: bash
         run: |
@@ -87,6 +90,10 @@ jobs:
             exit 1
           fi
 
+          candidate_sha=$(git rev-parse HEAD)
+          echo "candidate_sha=${candidate_sha}" >> "$GITHUB_OUTPUT"
+          echo "Prepared candidate commit ${candidate_sha}."
+
       - name: Set up Node.js
         if: steps.compare.outputs.has_changes == 'true'
         uses: actions/setup-node@v4
@@ -108,95 +115,436 @@ jobs:
           cache-on-failure: true
           shared-key: upstream-sync
 
-      - name: Install frontend dependencies
-        id: npm-ci
+      - name: Validate baseline and candidate
+        id: validation
         if: steps.compare.outputs.has_changes == 'true'
         continue-on-error: true
-        run: npm ci
-
-      - name: Lint frontend
-        id: frontend-lint
-        if: steps.compare.outputs.has_changes == 'true'
-        continue-on-error: true
-        run: npm run lint
-
-      - name: Build frontend
-        id: frontend-build
-        if: steps.compare.outputs.has_changes == 'true'
-        continue-on-error: true
-        run: npm run build
-
-      - name: Check Rust formatting
-        id: rust-format
-        if: steps.compare.outputs.has_changes == 'true'
-        continue-on-error: true
-        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-
-      - name: Check Rust
-        id: rust-check
-        if: steps.compare.outputs.has_changes == 'true'
-        continue-on-error: true
-        run: cargo check --manifest-path src-tauri/Cargo.toml --bin StreamNook --features phf/macros
+        shell: pwsh
         env:
-          TWITCH_APP_CLIENT_ID: upstream-sync-check
-          TWITCH_APP_CLIENT_SECRET: upstream-sync-check
-          TWITCH_ANDROID_CLIENT_ID: upstream-sync-check
-          TWITCH_WEB_CLIENT_ID: upstream-sync-check
+          BASELINE_SHA: ${{ steps.compare.outputs.baseline_sha }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $baselinePath = Join-Path $env:RUNNER_TEMP 'upstream-sync-baseline'
+          $resultsPath = Join-Path $env:RUNNER_TEMP 'upstream-sync-validation'
+          $cargoTarget = Join-Path $env:GITHUB_WORKSPACE 'src-tauri/target'
 
-      - name: Test Rust
-        id: rust-test
-        if: steps.compare.outputs.has_changes == 'true'
-        continue-on-error: true
-        run: cargo test --manifest-path src-tauri/Cargo.toml --bin StreamNook --features phf/macros
-        env:
-          TWITCH_APP_CLIENT_ID: upstream-sync-check
-          TWITCH_APP_CLIENT_SECRET: upstream-sync-check
-          TWITCH_ANDROID_CLIENT_ID: upstream-sync-check
-          TWITCH_WEB_CLIENT_ID: upstream-sync-check
+          if (Test-Path $baselinePath) {
+            git worktree remove --force $baselinePath
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if (Test-Path $resultsPath) {
+            Remove-Item -Recurse -Force $resultsPath
+          }
+          New-Item -ItemType Directory -Path $resultsPath | Out-Null
+
+          git worktree add --detach $baselinePath $env:BASELINE_SHA
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          function Invoke-ValidationCommand {
+            param(
+              [string]$Label,
+              [string]$WorkingDirectory,
+              [string]$FilePath,
+              [string[]]$Arguments,
+              [hashtable]$Environment = @{}
+            )
+
+            Write-Host "`n::group::$Label"
+            $lines = [System.Collections.Generic.List[string]]::new()
+            $savedEnvironment = @{}
+            Push-Location $WorkingDirectory
+            try {
+              foreach ($name in $Environment.Keys) {
+                $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+                [Environment]::SetEnvironmentVariable($name, $Environment[$name], 'Process')
+              }
+
+              & $FilePath @Arguments 2>&1 | ForEach-Object {
+                $line = $_.ToString()
+                $lines.Add($line)
+                Write-Host $line
+              }
+              $exitCode = $LASTEXITCODE
+            } finally {
+              foreach ($name in $Environment.Keys) {
+                [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process')
+              }
+              Pop-Location
+              Write-Host "::endgroup::"
+            }
+
+            return [ordered]@{
+              exitCode = $exitCode
+              output = $lines -join "`n"
+            }
+          }
+
+          function Get-RelativeFormatFiles {
+            param([string]$Output, [string]$Root)
+
+            $files = @(
+              [regex]::Matches($Output, '(?m)^Diff in (.+?):\d+:') | ForEach-Object {
+                $path = $_.Groups[1].Value.Trim()
+                if ($path.StartsWith('\\?\')) {
+                  $path = $path.Substring(4)
+                }
+                if ([System.IO.Path]::IsPathRooted($path)) {
+                  $rootPrefix = $Root.TrimEnd('\', '/') + '\'
+                  if ($path.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $path.Substring($rootPrefix.Length).Replace('\', '/')
+                  } else {
+                    $path.Replace('\', '/')
+                  }
+                } else {
+                  $path.Replace('\', '/')
+                }
+              } | Sort-Object -Unique
+            )
+            return @($files)
+          }
+
+          function Get-TestSummary {
+            param([string]$Output)
+
+            $summaryMatches = [regex]::Matches($Output, '(?m)^test result: (ok|FAILED)\..*$')
+            if ($summaryMatches.Count -eq 0) {
+              return [ordered]@{ valid = $false; result = 'unknown'; failures = @() }
+            }
+
+            $summary = $summaryMatches[$summaryMatches.Count - 1]
+            $result = $summary.Groups[1].Value
+            $failures = @()
+            if ($result -eq 'FAILED') {
+              $prefix = $Output.Substring(0, $summary.Index)
+              $failuresIndex = $prefix.LastIndexOf('failures:', [System.StringComparison]::Ordinal)
+              if ($failuresIndex -lt 0) {
+                return [ordered]@{ valid = $false; result = $result; failures = @() }
+              }
+
+              $blockStart = $failuresIndex + 'failures:'.Length
+              $block = $prefix.Substring($blockStart)
+              $failures = @(
+                $block -split "`r?`n" | ForEach-Object { $_.Trim() } |
+                  Where-Object { $_ } | Sort-Object -Unique
+              )
+              if ($failures.Count -eq 0) {
+                return [ordered]@{ valid = $false; result = $result; failures = @() }
+              }
+            }
+
+            return [ordered]@{ valid = $true; result = $result; failures = @($failures) }
+          }
+
+          function Invoke-RevisionValidation {
+            param([string]$Name, [string]$Root, [string]$Sha)
+
+            Write-Host "`n========== Validating $Name ($Sha) =========="
+            $npmCi = Invoke-ValidationCommand "$Name - npm ci" $Root 'npm.cmd' @('ci')
+
+            $lintJson = Join-Path $resultsPath "$Name-eslint.json"
+            $lint = Invoke-ValidationCommand "$Name - npm run lint" $Root 'npm.cmd' @(
+              'run', 'lint', '--', '--format', 'json', '--output-file', $lintJson
+            )
+            $lintValid = $false
+            $lintErrors = 0
+            $lintWarnings = 0
+            if (Test-Path $lintJson) {
+              try {
+                $lintResults = Get-Content $lintJson -Raw | ConvertFrom-Json
+                $lintErrors = [int](($lintResults | Measure-Object -Property errorCount -Sum).Sum)
+                $lintWarnings = [int](($lintResults | Measure-Object -Property warningCount -Sum).Sum)
+                $lintValid = $lint.exitCode -in @(0, 1)
+              } catch {
+                Write-Warning "Could not parse ESLint JSON for $Name`: $_"
+              }
+            }
+
+            $build = Invoke-ValidationCommand "$Name - npm run build" $Root 'npm.cmd' @('run', 'build')
+
+            $cargoEnvironment = @{
+              CARGO_TARGET_DIR = $cargoTarget
+              CARGO_TERM_COLOR = 'never'
+            }
+            $rustFormat = Invoke-ValidationCommand "$Name - cargo fmt --check" $Root 'cargo.exe' @(
+              'fmt', '--manifest-path', 'src-tauri/Cargo.toml', '--', '--check'
+            ) $cargoEnvironment
+            $formatFiles = @(Get-RelativeFormatFiles $rustFormat.output $Root)
+            $formatValid = $rustFormat.exitCode -eq 0 -or $formatFiles.Count -gt 0
+
+            $twitchEnvironment = @{
+              CARGO_TARGET_DIR = $cargoTarget
+              CARGO_TERM_COLOR = 'never'
+              TWITCH_APP_CLIENT_ID = 'upstream-sync-check'
+              TWITCH_APP_CLIENT_SECRET = 'upstream-sync-check'
+              TWITCH_ANDROID_CLIENT_ID = 'upstream-sync-check'
+              TWITCH_WEB_CLIENT_ID = 'upstream-sync-check'
+            }
+            $rustCheck = Invoke-ValidationCommand "$Name - cargo check" $Root 'cargo.exe' @(
+              'check', '--manifest-path', 'src-tauri/Cargo.toml', '--bin', 'StreamNook', '--features', 'phf/macros'
+            ) $twitchEnvironment
+            $rustTest = Invoke-ValidationCommand "$Name - cargo test" $Root 'cargo.exe' @(
+              'test', '--manifest-path', 'src-tauri/Cargo.toml', '--bin', 'StreamNook', '--features', 'phf/macros'
+            ) $twitchEnvironment
+            $testSummary = Get-TestSummary $rustTest.output
+
+            $result = [ordered]@{
+              revision = $Name
+              sha = $Sha
+              npmCi = [ordered]@{ exitCode = $npmCi.exitCode }
+              lint = [ordered]@{
+                exitCode = $lint.exitCode
+                valid = $lintValid
+                errors = $lintErrors
+                warnings = $lintWarnings
+              }
+              build = [ordered]@{ exitCode = $build.exitCode }
+              rustFormat = [ordered]@{
+                exitCode = $rustFormat.exitCode
+                valid = $formatValid
+                files = @($formatFiles)
+              }
+              rustCheck = [ordered]@{ exitCode = $rustCheck.exitCode }
+              rustTest = [ordered]@{
+                exitCode = $rustTest.exitCode
+                valid = $testSummary.valid
+                result = $testSummary.result
+                failures = @($testSummary.failures)
+              }
+            }
+            $result | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $resultsPath "$Name.json") -Encoding utf8
+          }
+
+          try {
+            Invoke-RevisionValidation 'baseline' $baselinePath $env:BASELINE_SHA
+            Invoke-RevisionValidation 'candidate' $env:GITHUB_WORKSPACE $env:CANDIDATE_SHA
+          } catch {
+            Write-Error "Validation could not complete: $_"
+          } finally {
+            git worktree remove --force $baselinePath
+            if ($LASTEXITCODE -ne 0) {
+              Write-Warning "Could not remove baseline worktree at $baselinePath."
+            }
+            git worktree prune
+          }
+
+      - name: Compare baseline and candidate
+        id: regression
+        if: >-
+          always() &&
+          steps.compare.outputs.has_changes == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $resultsPath = Join-Path $env:RUNNER_TEMP 'upstream-sync-validation'
+          $baselineFile = Join-Path $resultsPath 'baseline.json'
+          $candidateFile = Join-Path $resultsPath 'candidate.json'
+          $comparisonFile = Join-Path $resultsPath 'comparison.json'
+          $rows = [System.Collections.Generic.List[object]]::new()
+          $shouldFail = $false
+
+          function Add-ComparisonRow {
+            param(
+              [string]$Check,
+              [string]$Baseline,
+              [string]$Candidate,
+              [string]$Status,
+              [string]$Details = ''
+            )
+            $script:rows.Add([ordered]@{
+              check = $Check
+              baseline = $Baseline
+              candidate = $Candidate
+              status = $Status
+              details = $Details
+            })
+            if ($Status -in @('REGRESSION', 'INDETERMINATE')) {
+              $script:shouldFail = $true
+            }
+          }
+
+          function Format-Outcome([int]$ExitCode) {
+            if ($ExitCode -eq 0) { return 'PASS' }
+            return "FAIL (exit $ExitCode)"
+          }
+
+          function Compare-StrictCheck {
+            param([string]$Check, [int]$BaselineExit, [int]$CandidateExit)
+            $baselineText = Format-Outcome $BaselineExit
+            $candidateText = Format-Outcome $CandidateExit
+            if ($BaselineExit -eq 0 -and $CandidateExit -eq 0) {
+              Add-ComparisonRow $Check $baselineText $candidateText 'PASS'
+            } elseif ($BaselineExit -eq 0) {
+              Add-ComparisonRow $Check $baselineText $candidateText 'REGRESSION'
+            } elseif ($CandidateExit -eq 0) {
+              Add-ComparisonRow $Check $baselineText $candidateText 'IMPROVED'
+            } else {
+              Add-ComparisonRow $Check $baselineText $candidateText 'BASELINE / unchanged' 'Both revisions failed; this pass/fail-only check cannot compare failure details.'
+            }
+          }
+
+          if (-not (Test-Path $baselineFile) -or -not (Test-Path $candidateFile)) {
+            Add-ComparisonRow 'Validation data' 'Unavailable' 'Unavailable' 'INDETERMINATE' 'One or both revision result files were not produced.'
+          } else {
+            try {
+              $baseline = Get-Content $baselineFile -Raw | ConvertFrom-Json
+              $candidate = Get-Content $candidateFile -Raw | ConvertFrom-Json
+            } catch {
+              Add-ComparisonRow 'Validation data' 'Unreadable' 'Unreadable' 'INDETERMINATE' "Could not parse revision results: $_"
+            }
+
+            if ($null -ne $baseline -and $null -ne $candidate) {
+              Compare-StrictCheck 'npm ci' $baseline.npmCi.exitCode $candidate.npmCi.exitCode
+
+              if (-not $baseline.lint.valid -or -not $candidate.lint.valid) {
+                Add-ComparisonRow 'npm run lint' 'Unparseable' 'Unparseable' 'INDETERMINATE' 'ESLint JSON was not available for one or both revisions.'
+              } else {
+                $baselineLint = "$($baseline.lint.errors) errors, $($baseline.lint.warnings) warnings"
+                $candidateLint = "$($candidate.lint.errors) errors, $($candidate.lint.warnings) warnings"
+                $lintDetails = 'Warnings are reported but do not affect regression status.'
+                if ($candidate.lint.errors -gt $baseline.lint.errors) {
+                  Add-ComparisonRow 'npm run lint' $baselineLint $candidateLint 'REGRESSION' $lintDetails
+                } elseif ($candidate.lint.errors -lt $baseline.lint.errors) {
+                  Add-ComparisonRow 'npm run lint' $baselineLint $candidateLint 'IMPROVED' $lintDetails
+                } elseif ($candidate.lint.errors -eq 0) {
+                  Add-ComparisonRow 'npm run lint' $baselineLint $candidateLint 'PASS' $lintDetails
+                } else {
+                  Add-ComparisonRow 'npm run lint' $baselineLint $candidateLint 'BASELINE / unchanged' $lintDetails
+                }
+              }
+
+              Compare-StrictCheck 'npm run build' $baseline.build.exitCode $candidate.build.exitCode
+
+              if (-not $baseline.rustFormat.valid -or -not $candidate.rustFormat.valid) {
+                Add-ComparisonRow 'cargo fmt --check' 'Unparseable' 'Unparseable' 'INDETERMINATE' 'Rustfmt did not produce a successful result or a parseable file set.'
+              } else {
+                $baselineFormatFiles = @($baseline.rustFormat.files | ForEach-Object { [string]$_ })
+                $candidateFormatFiles = @($candidate.rustFormat.files | ForEach-Object { [string]$_ })
+                $newFormatFiles = @($candidateFormatFiles | Where-Object { $_ -notin $baselineFormatFiles } | Sort-Object -Unique)
+                $baselineFormat = "$($baselineFormatFiles.Count) file(s)"
+                $candidateFormat = "$($candidateFormatFiles.Count) file(s)"
+                $formatDetails = if ($newFormatFiles.Count) { "New files: $($newFormatFiles -join ', ')" } else { 'No newly unformatted files.' }
+                if ($newFormatFiles.Count) {
+                  Add-ComparisonRow 'cargo fmt --check' $baselineFormat $candidateFormat 'REGRESSION' $formatDetails
+                } elseif ($candidateFormatFiles.Count -lt $baselineFormatFiles.Count) {
+                  Add-ComparisonRow 'cargo fmt --check' $baselineFormat $candidateFormat 'IMPROVED' $formatDetails
+                } elseif ($candidateFormatFiles.Count -eq 0) {
+                  Add-ComparisonRow 'cargo fmt --check' $baselineFormat $candidateFormat 'PASS' $formatDetails
+                } else {
+                  Add-ComparisonRow 'cargo fmt --check' $baselineFormat $candidateFormat 'BASELINE / unchanged' $formatDetails
+                }
+              }
+
+              Compare-StrictCheck 'cargo check --bin StreamNook' $baseline.rustCheck.exitCode $candidate.rustCheck.exitCode
+
+              if (-not $baseline.rustTest.valid -or -not $candidate.rustTest.valid) {
+                $baselineTest = if ($baseline.rustTest.valid) { "$(@($baseline.rustTest.failures).Count) failing" } else { 'No usable test summary' }
+                $candidateTest = if ($candidate.rustTest.valid) { "$(@($candidate.rustTest.failures).Count) failing" } else { 'No usable test summary' }
+                Add-ComparisonRow 'cargo test --bin StreamNook' $baselineTest $candidateTest 'INDETERMINATE' 'A compile, runner, or output-parsing failure prevented test-name comparison.'
+              } else {
+                $baselineFailures = @($baseline.rustTest.failures | ForEach-Object { [string]$_ })
+                $candidateFailures = @($candidate.rustTest.failures | ForEach-Object { [string]$_ })
+                $newFailures = @($candidateFailures | Where-Object { $_ -notin $baselineFailures } | Sort-Object -Unique)
+                $baselineTest = if ($baselineFailures.Count) { $baselineFailures -join ', ' } else { 'PASS (no failures)' }
+                $candidateTest = if ($candidateFailures.Count) { $candidateFailures -join ', ' } else { 'PASS (no failures)' }
+                $testDetails = if ($newFailures.Count) { "New failing tests: $($newFailures -join ', ')" } else { 'No new failing test names.' }
+                if ($newFailures.Count) {
+                  Add-ComparisonRow 'cargo test --bin StreamNook' $baselineTest $candidateTest 'REGRESSION' $testDetails
+                } elseif ($candidateFailures.Count -lt $baselineFailures.Count) {
+                  Add-ComparisonRow 'cargo test --bin StreamNook' $baselineTest $candidateTest 'IMPROVED' $testDetails
+                } elseif ($candidateFailures.Count -eq 0) {
+                  Add-ComparisonRow 'cargo test --bin StreamNook' $baselineTest $candidateTest 'PASS' $testDetails
+                } else {
+                  Add-ComparisonRow 'cargo test --bin StreamNook' $baselineTest $candidateTest 'BASELINE / unchanged' $testDetails
+                }
+              }
+            }
+          }
+
+          $comparison = [ordered]@{
+            shouldFail = $shouldFail
+            rows = @($rows)
+          }
+          $comparison | ConvertTo-Json -Depth 8 | Set-Content $comparisonFile -Encoding utf8
+          "should_fail=$($shouldFail.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "comparison_ready=true" >> $env:GITHUB_OUTPUT
+
+          $rows | Format-Table check, baseline, candidate, status -AutoSize | Out-String | Write-Host
+          if ($shouldFail) {
+            Write-Warning 'Validation found a regression or an indeterminate comparison.'
+          } else {
+            Write-Host 'No candidate regression was found.'
+          }
 
       - name: Push only the sync branch
-        if: steps.compare.outputs.has_changes == 'true'
+        if: >-
+          always() &&
+          steps.compare.outputs.has_changes == 'true' &&
+          steps.regression.outcome == 'success'
         shell: bash
         run: git push origin "HEAD:refs/heads/${SYNC_BRANCH}"
 
       - name: Create or update the pull request
-        if: steps.compare.outputs.has_changes == 'true'
+        if: >-
+          always() &&
+          steps.compare.outputs.has_changes == 'true' &&
+          steps.regression.outcome == 'success'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          BASELINE_SHA: ${{ steps.compare.outputs.baseline_sha }}
           UPSTREAM_SHA: ${{ steps.compare.outputs.upstream_sha }}
-          NPM_CI_RESULT: ${{ steps.npm-ci.outcome }}
-          FRONTEND_LINT_RESULT: ${{ steps.frontend-lint.outcome }}
-          FRONTEND_BUILD_RESULT: ${{ steps.frontend-build.outcome }}
-          RUST_FORMAT_RESULT: ${{ steps.rust-format.outcome }}
-          RUST_CHECK_RESULT: ${{ steps.rust-check.outcome }}
-          RUST_TEST_RESULT: ${{ steps.rust-test.outcome }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
         run: |
+          $ErrorActionPreference = 'Stop'
+          $comparisonFile = Join-Path $env:RUNNER_TEMP 'upstream-sync-validation/comparison.json'
+          $comparison = Get-Content $comparisonFile -Raw | ConvertFrom-Json
+
+          function Escape-Markdown([string]$Value) {
+            return $Value.Replace('|', '\|') -replace "`r?`n", '<br>'
+          }
+
+          $tableRows = @(
+            foreach ($row in $comparison.rows) {
+              $baseline = Escape-Markdown $row.baseline
+              $candidate = Escape-Markdown $row.candidate
+              $status = Escape-Markdown $row.status
+              $details = Escape-Markdown $row.details
+              "| ``$($row.check)`` | $baseline | $candidate | **$status** | $details |"
+            }
+          ) -join "`n"
+
+          $overall = if ($comparison.shouldFail) {
+            '**REGRESSION OR INDETERMINATE — workflow will fail after this PR is updated.**'
+          } else {
+            '**NO REGRESSION — unchanged baseline failures do not fail this workflow.**'
+          }
+
           $title = "Sync upstream StreamNook into Bluzyrino"
           $body = @"
           ## Upstream sync
 
+          - Baseline (``origin/$env:TARGET_BRANCH``): ``$env:BASELINE_SHA``
+          - Candidate (``$env:SYNC_BRANCH``): ``$env:CANDIDATE_SHA``
           - Upstream commit: ``$env:UPSTREAM_SHA``
-          - Source: ``winters27/StreamNook:main``
+          - Source: ``$env:UPSTREAM_REPOSITORY`:main``
           - Target: ``$env:TARGET_BRANCH``
 
-          ## Checks
+          ## Baseline-aware validation
 
-          | Check | Result |
-          | --- | --- |
-          | ``npm ci`` | $env:NPM_CI_RESULT |
-          | ``npm run lint`` | $env:FRONTEND_LINT_RESULT |
-          | ``npm run build`` | $env:FRONTEND_BUILD_RESULT |
-          | ``cargo fmt --check`` | $env:RUST_FORMAT_RESULT |
-          | ``cargo check --bin StreamNook`` | $env:RUST_CHECK_RESULT |
-          | ``cargo test --bin StreamNook`` | $env:RUST_TEST_RESULT |
+          $overall
+
+          | Check | Baseline result | Candidate result | Regression status | Details |
+          | --- | --- | --- | --- | --- |
+          $tableRows
 
           **Manual review and approval are required. This pull request is never merged or released automatically.**
 
           Workflow run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
           "@
 
-          $head = "gxufy:$env:SYNC_BRANCH"
+          $owner = $env:GITHUB_REPOSITORY.Split('/')[0]
+          $head = "$owner`:$env:SYNC_BRANCH"
           $existing = gh api "repos/$env:GITHUB_REPOSITORY/pulls?state=open&head=$head&base=$env:TARGET_BRANCH" --jq '.[0].number // empty'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -216,16 +564,14 @@ jobs:
             "Created pull request."
           }
 
-      - name: Fail if checks did not pass
+      - name: Fail on regressions or indeterminate comparison
         if: >-
+          always() &&
           steps.compare.outputs.has_changes == 'true' &&
-          (steps.npm-ci.outcome != 'success' ||
-          steps.frontend-lint.outcome != 'success' ||
-          steps.frontend-build.outcome != 'success' ||
-          steps.rust-format.outcome != 'success' ||
-          steps.rust-check.outcome != 'success' ||
-          steps.rust-test.outcome != 'success')
+          (steps.regression.outcome != 'success' ||
+          steps.regression.outputs.comparison_ready != 'true' ||
+          steps.regression.outputs.should_fail == 'true')
         shell: bash
         run: |
-          echo "::error::The sync branch and pull request were prepared, but one or more checks failed. Review the pull request and workflow logs."
+          echo "::error::The sync branch and pull request were prepared, but validation found a regression or could not make a reliable comparison. Review the pull request and workflow logs."
           exit 1
