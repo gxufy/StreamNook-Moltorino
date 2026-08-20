@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TARGET_BRANCH: feature/moltorino-embedded-chat
+  TARGET_BRANCH: main
   SYNC_BRANCH: automation/upstream-sync
   UPSTREAM_REPOSITORY: winters27/StreamNook
 
