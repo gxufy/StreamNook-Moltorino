@@ -1,0 +1,231 @@
+name: Prepare Upstream Sync
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: upstream-sync
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/moltorino-embedded-chat
+  SYNC_BRANCH: automation/upstream-sync
+  UPSTREAM_REPOSITORY: winters27/StreamNook
+
+jobs:
+  prepare-sync:
+    if: github.repository == 'gxufy/StreamNook-Moltorino'
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fetch target and upstream
+        shell: bash
+        run: |
+          git fetch --no-tags origin \
+            "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+          git remote add upstream "https://github.com/${UPSTREAM_REPOSITORY}.git"
+          git fetch --no-tags upstream \
+            "+refs/heads/main:refs/remotes/upstream/main"
+
+      - name: Check for new upstream commits
+        id: compare
+        shell: bash
+        run: |
+          upstream_sha=$(git rev-parse upstream/main)
+          echo "upstream_sha=${upstream_sha}" >> "$GITHUB_OUTPUT"
+
+          if git merge-base --is-ancestor upstream/main "origin/${TARGET_BRANCH}"; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            echo "No new upstream commits to sync."
+          else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+              echo "::error::Unable to compare upstream/main with ${TARGET_BRANCH}."
+              exit "$status"
+            fi
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+            echo "Upstream commit ${upstream_sha} needs to be synced."
+          fi
+
+      - name: Create or update the sync branch
+        if: steps.compare.outputs.has_changes == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --heads origin "$SYNC_BRANCH" >/dev/null 2>&1; then
+            git fetch --no-tags origin \
+              "+refs/heads/${SYNC_BRANCH}:refs/remotes/origin/${SYNC_BRANCH}"
+            git switch --create "$SYNC_BRANCH" --track "origin/${SYNC_BRANCH}"
+
+            if ! git merge --no-edit "origin/${TARGET_BRANCH}"; then
+              git merge --abort || true
+              echo "::error::Merge conflict while updating ${SYNC_BRANCH} from ${TARGET_BRANCH}; merge aborted and nothing was pushed."
+              exit 1
+            fi
+          else
+            git switch --create "$SYNC_BRANCH" "origin/${TARGET_BRANCH}"
+          fi
+
+          if ! git merge --no-ff --no-edit upstream/main; then
+            git merge --abort || true
+            echo "::error::Merge conflict while merging upstream/main into ${SYNC_BRANCH}; merge aborted and nothing was pushed."
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        if: steps.compare.outputs.has_changes == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Set up Rust
+        if: steps.compare.outputs.has_changes == 'true'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Cache Rust build artifacts
+        if: steps.compare.outputs.has_changes == 'true'
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-on-failure: true
+          shared-key: upstream-sync
+
+      - name: Install frontend dependencies
+        id: npm-ci
+        if: steps.compare.outputs.has_changes == 'true'
+        continue-on-error: true
+        run: npm ci
+
+      - name: Lint frontend
+        id: frontend-lint
+        if: steps.compare.outputs.has_changes == 'true'
+        continue-on-error: true
+        run: npm run lint
+
+      - name: Build frontend
+        id: frontend-build
+        if: steps.compare.outputs.has_changes == 'true'
+        continue-on-error: true
+        run: npm run build
+
+      - name: Check Rust formatting
+        id: rust-format
+        if: steps.compare.outputs.has_changes == 'true'
+        continue-on-error: true
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Check Rust
+        id: rust-check
+        if: steps.compare.outputs.has_changes == 'true'
+        continue-on-error: true
+        run: cargo check --manifest-path src-tauri/Cargo.toml --bin StreamNook --features phf/macros
+        env:
+          TWITCH_APP_CLIENT_ID: upstream-sync-check
+          TWITCH_APP_CLIENT_SECRET: upstream-sync-check
+          TWITCH_ANDROID_CLIENT_ID: upstream-sync-check
+          TWITCH_WEB_CLIENT_ID: upstream-sync-check
+
+      - name: Test Rust
+        id: rust-test
+        if: steps.compare.outputs.has_changes == 'true'
+        continue-on-error: true
+        run: cargo test --manifest-path src-tauri/Cargo.toml --bin StreamNook --features phf/macros
+        env:
+          TWITCH_APP_CLIENT_ID: upstream-sync-check
+          TWITCH_APP_CLIENT_SECRET: upstream-sync-check
+          TWITCH_ANDROID_CLIENT_ID: upstream-sync-check
+          TWITCH_WEB_CLIENT_ID: upstream-sync-check
+
+      - name: Push only the sync branch
+        if: steps.compare.outputs.has_changes == 'true'
+        shell: bash
+        run: git push origin "HEAD:refs/heads/${SYNC_BRANCH}"
+
+      - name: Create or update the pull request
+        if: steps.compare.outputs.has_changes == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_SHA: ${{ steps.compare.outputs.upstream_sha }}
+          NPM_CI_RESULT: ${{ steps.npm-ci.outcome }}
+          FRONTEND_LINT_RESULT: ${{ steps.frontend-lint.outcome }}
+          FRONTEND_BUILD_RESULT: ${{ steps.frontend-build.outcome }}
+          RUST_FORMAT_RESULT: ${{ steps.rust-format.outcome }}
+          RUST_CHECK_RESULT: ${{ steps.rust-check.outcome }}
+          RUST_TEST_RESULT: ${{ steps.rust-test.outcome }}
+        run: |
+          $title = "Sync upstream StreamNook into Moltorino"
+          $body = @"
+          ## Upstream sync
+
+          - Upstream commit: ``$env:UPSTREAM_SHA``
+          - Source: ``winters27/StreamNook:main``
+          - Target: ``$env:TARGET_BRANCH``
+
+          ## Checks
+
+          | Check | Result |
+          | --- | --- |
+          | ``npm ci`` | $env:NPM_CI_RESULT |
+          | ``npm run lint`` | $env:FRONTEND_LINT_RESULT |
+          | ``npm run build`` | $env:FRONTEND_BUILD_RESULT |
+          | ``cargo fmt --check`` | $env:RUST_FORMAT_RESULT |
+          | ``cargo check --bin StreamNook`` | $env:RUST_CHECK_RESULT |
+          | ``cargo test --bin StreamNook`` | $env:RUST_TEST_RESULT |
+
+          **Manual review and approval are required. This pull request is never merged or released automatically.**
+
+          Workflow run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID
+          "@
+
+          $head = "gxufy:$env:SYNC_BRANCH"
+          $existing = gh api "repos/$env:GITHUB_REPOSITORY/pulls?state=open&head=$head&base=$env:TARGET_BRANCH" --jq '.[0].number // empty'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          if ($existing) {
+            gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/pulls/$existing" `
+              -f "title=$title" `
+              -f "body=$body" | Out-Null
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            "Updated pull request #$existing."
+          } else {
+            gh api --method POST "repos/$env:GITHUB_REPOSITORY/pulls" `
+              -f "title=$title" `
+              -f "head=$env:SYNC_BRANCH" `
+              -f "base=$env:TARGET_BRANCH" `
+              -f "body=$body" | Out-Null
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            "Created pull request."
+          }
+
+      - name: Fail if checks did not pass
+        if: >-
+          steps.compare.outputs.has_changes == 'true' &&
+          (steps.npm-ci.outcome != 'success' ||
+          steps.frontend-lint.outcome != 'success' ||
+          steps.frontend-build.outcome != 'success' ||
+          steps.rust-format.outcome != 'success' ||
+          steps.rust-check.outcome != 'success' ||
+          steps.rust-test.outcome != 'success')
+        shell: bash
+        run: |
+          echo "::error::The sync branch and pull request were prepared, but one or more checks failed. Review the pull request and workflow logs."
+          exit 1
