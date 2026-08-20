@@ -1,3 +1,60 @@
+## [8.4.2] - 2026-08-16
+
+## 🔦 Feature Spotlight: The Command Palette
+> Meet the Feature Spotlight, a new series in these release notes. Each spotlight shines a light on something StreamNook can already do that you might not have discovered yet. First up: press Ctrl+K anywhere and the command palette opens, one search box that finds everything in the app.
+
+![The StreamNook command palette](https://raw.githubusercontent.com/winters27/StreamNook/main/.github/assets/spotlight-command-palette.png)
+
+---
+
+### ✨ Features
+- If you have never tried the command palette, here is what Ctrl+K can do:
+  - Jump straight to any streamer you follow, search for new ones, or browse categories.
+  - Open any settings page instantly. Every setting is searchable by name, no digging through tabs.
+  - Fire quick actions without touching the mouse: MultiChat, the Drops center, Badges and Paints, Whispers, your profile, Compact View, full screen, and more.
+  - Act on the current stream: jump between your open chats, share the stream, or find recent chatters from the channel you are watching.
+  - Save chat snippets with custom aliases and favorites, then send them straight from the palette. There is a built-in guide and snippet manager too, just search "guide".
+- The command palette now introduces itself: look for hints in the loading messages, the settings sidebar, and the setup wizard.
+
+### 🐛 Bug Fixes
+- Fixed chat that could silently stop receiving new messages while sending kept working, even after a refresh. The chat connection now heals itself: dead or stalled connections are detected within about a minute, reconnection retries automatically with smart backoff, and sign-in credentials refresh on every attempt instead of going stale.
+- Messages missed while chat was reconnecting are now fetched and stitched back into their correct place in the conversation, with an inline marker showing where the connection dropped.
+- Reconnecting with many chats open now rejoins channels at a safe pace, avoiding Twitch's join limits.
+- Fixed stream overlays that could collapse onto one shared link when switching profiles while edits were saving. Each profile now keeps its own overlay URL, and affected setups repair themselves the next time the profile is published.
+
+### 🔧 Maintenance
+- Chat connection events are now kept in a small diagnostic log, making connection reports much easier to track down.
+
+## [8.4.1] - 2026-08-14
+
+### 🐛 Bug Fixes
+- Custom channel cheermotes now animate in chat with the right tier colors and art at every bits amount. Channels with their own cheermote (and even Twitch's Cheerwhal) used to show up as plain text.
+- Overlay event cards now look identical for your viewers and in the builder preview. Cards on the hosted overlay rendered with smaller padding and rounding than the preview showed, and an event line could sit too high inside its own highlight at tighter line heights.
+
+## [8.4.0] - 2026-08-10
+
+## 🎉 New: Chat replay on clips
+> Clips now play with the chat that was live when they happened, right beside the video. Scrub backwards and the chat rewinds with you. It works for clips opened from a profile, from a link in chat, or from browse, and it shows paints, badges and emotes exactly the way live chat does.
+
+---
+
+### ✨ Features
+- Clips now replay the chat from the moment they were captured, in a panel beside the video. Turn it off any time in Chat settings.
+- VODs opened from a streamer's Videos tab now show chat replay. Previously only the Watch VOD shortcut did.
+- Your stream overlay gained text controls. Justify left, center or right, pick a text weight, and turn on italic or strikethrough.
+- Overlay text shadow is now adjustable. Choose its color, size and strength instead of just on or off.
+- Gigantified emotes on the overlay can sit left, centered, right, or inline right after the name.
+- Bits messages on the overlay can render as an event card like subs and raids, or stay inline as a normal message.
+
+### 🐛 Bug Fixes
+- The profile popout no longer opens on a different monitor than the one you clicked on.
+- Streamer profile pictures now appear while watching a VOD or a clip.
+- The loading mark animates again for anyone with Windows animation effects turned off.
+- Scrubbing backwards in a clip now takes away the chat that has not happened yet.
+
+### 🔧 Maintenance
+- A fresh set of loading messages and emotes.
+
 ## [8.3.12] - 2026-08-07
 
 ### ✨ Features

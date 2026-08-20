@@ -505,6 +505,18 @@ const ChatSettings = ({ hidePlacement = false }: { hidePlacement?: boolean } = {
             />
           }
         />
+        <SettingsRow
+          title="Chat replay on clips"
+          description="Show the chat that was live while a clip was recorded, beside the clip. Needs the original broadcast to still be up, so older clips may have none."
+          control={
+            <Toggle
+              enabled={settings.clip_chat_replay ?? true}
+              onChange={() =>
+                updateSettings({ ...settings, clip_chat_replay: !(settings.clip_chat_replay ?? true) })
+              }
+            />
+          }
+        />
       </SettingsSection>
 
       <SettingsSection label="Chat Logging">

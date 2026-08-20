@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ChatMessageList from './ChatMessageList';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { openProfilePopup } from '../utils/openProfilePopup';
 import { Pickaxe, Gift, Settings, MessagesSquare, Zap, BarChart3 } from 'lucide-react';
 
 // Channel Points Icon (Twitch style)
@@ -3385,63 +3385,29 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
   // Declared here, above the early returns below, so it can be a useCallback
   // (hooks can't live after a conditional return).
   const handleUsernameClick = useCallback(async (userId: string, username: string, displayName: string, color: string, badges: Array<{ key: string; info: any }>, event: React.MouseEvent) => {
-    try {
-      const { WebviewWindow } = await import('@tauri-apps/api/webviewWindow');
-      const { getCurrentWindow } = await import('@tauri-apps/api/window');
-      const mainWindow = getCurrentWindow();
-      const mainPosition = await mainWindow.outerPosition();
-      // Popout window width matches the default chat panel width (402px, see
-      // App.tsx:DEFAULT_CHAT_WIDTH) so a docked or side-by-side popout reads
-      // as a familiar chat-shaped surface. Height stays tall to give the
-      // messages view room — message rows are short so height drives capacity.
-      const cardWidth = 402;
-      const cardHeight = 680;
-      const gap = 10;
-      // Anchor the popout to the CURSOR position, not the main window's origin.
-      // Previously the math was `mainPosition.x - cardWidth - gap`, which
-      // placed the popout at a fixed offset to the left of the entire app
-      // regardless of where in chat the user clicked — making it open "far
-      // away for no reason." Convert the click's viewport coords to screen
-      // coords by adding the main window's outer position, then place the
-      // popout just to the left of the cursor with a small gap. If that
-      // would push off-screen left, flip to the right of the cursor.
-      const cursorScreenX = mainPosition.x + event.clientX;
-      const cursorScreenY = mainPosition.y + event.clientY;
-      let x = cursorScreenX - cardWidth - gap;
-      let y = cursorScreenY - Math.floor(cardHeight / 2);
-      if (x < 0) x = cursorScreenX + gap;
-      if (y < 0) y = 0;
-      const windowLabel = `profile-${userId}-${Date.now()}`;
-
-      // PHASE 3: Fetch message history from Rust LRU cache instead of frontend Map
-      // This eliminates frontend memory overhead and provides more reliable history
-      let messageHistory: any[] = [];
-      try {
-        messageHistory = await invoke<any[]>('get_user_message_history', { userId });
-      } catch (err) {
-        Logger.warn('[ChatWidget] Failed to fetch user history from Rust, using frontend cache:', err);
-        messageHistory = userMessageHistory.current.get(userId) || [];
-      }
-
-      const params = new URLSearchParams({
-        userId, username, displayName, color,
-        badges: JSON.stringify(badges),
-        channelId: currentStream?.user_id || '',
-        channelName: currentStream?.user_login || '',
-        messageHistory: JSON.stringify(messageHistory)
-      });
-      const profileWindow = new WebviewWindow(windowLabel, {
-        url: `${window.location.origin}/#/profile?${params.toString()}`,
-        title: `${displayName}'s Profile`,
-        width: cardWidth, height: cardHeight, x, y,
-        resizable: false, decorations: false, alwaysOnTop: true, skipTaskbar: true, transparent: true, focus: true
-      });
-      profileWindow.once('tauri://error', (e) => Logger.error('Error opening profile window:', e));
-    } catch (err) {
-      Logger.error('Failed to open profile window:', err);
+    // Placement lives in openProfilePopup, which is the single implementation. This
+    // used to hand-roll its own copy that added the main window's PHYSICAL position
+    // to the click's LOGICAL clientX and passed the result as a logical window
+    // coordinate — so on a scaled monitor Tauri multiplied the already-inflated
+    // number by the scale factor again and threw the card onto whatever display sat
+    // to the right. The shared helper converts units properly and clamps the card
+    // inside the monitor the cursor is actually on.
+    const opened = await openProfilePopup({
+      userId,
+      username,
+      displayName,
+      color,
+      badges,
+      channelId: currentStream?.user_id || '',
+      channelName: currentStream?.user_login || '',
+      isModerator,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    });
+    if (!opened) {
       setSelectedUser({ userId, username, displayName, color, badges, position: { x: event.clientX, y: event.clientY } });
     }
-  }, [currentStream?.user_id, currentStream?.user_login]);
+  }, [currentStream?.user_id, currentStream?.user_login, isModerator]);
   // Refresh the latest-handler ref each render so window-event callers (e.g. the
   // /usercard and /user commands) invoke the current closure.
   handleUsernameClickRef.current = handleUsernameClick;

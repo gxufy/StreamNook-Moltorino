@@ -358,6 +358,13 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   },
   {
     tab: 'Chat',
+    section: 'Chat Events',
+    sectionId: 'settings-section-chat-events',
+    title: 'Chat replay on clips',
+    description: 'Show the chat that was live while a clip was recorded, beside the clip. VOD chat replay for clips, historical chat, clip chat, past chat.'
+  },
+  {
+    tab: 'Chat',
     section: 'Chat Logging',
     title: 'Chat Logging',
     description: 'Save chat to plain text files as you watch: one folder per channel, one file per day. Log folder, per-channel filter, timestamps, events and moderation.'
@@ -952,6 +959,18 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   },
   {
     tab: 'Overlay',
+    section: 'Typography',
+    title: 'Justify text',
+    description: 'Align overlay messages left, centered, or right. Justification, text alignment, centre, middle, position.'
+  },
+  {
+    tab: 'Overlay',
+    section: 'Typography',
+    title: 'Text style',
+    description: 'Make overlay message text bold, light, italic, or strikethrough. Font weight, slant, crossed out, line through.'
+  },
+  {
+    tab: 'Overlay',
     section: 'Emotes & Badges',
     title: 'Emotes and Badges',
     description: 'Emote size on the overlay and whether chatter badges are shown: platform badges, third-party badges (7TV, FFZ, Chatterino), the StreamNook member badge, 7TV paints, and atmospheres.'
@@ -964,9 +983,21 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
   },
   {
     tab: 'Overlay',
+    section: 'Emotes & Badges',
+    title: 'Giant emote placement',
+    description: 'Where a Gigantify power-up emote lands on the overlay: left, centered, or right below the message, or inline next to the username.'
+  },
+  {
+    tab: 'Overlay',
     section: 'Appearance',
     title: 'Appearance',
     description: 'Message text color, text shadow for legibility over any scene, timestamps, and a transparent or solid background.'
+  },
+  {
+    tab: 'Overlay',
+    section: 'Appearance',
+    title: 'Text shadow',
+    description: 'Shadow behind overlay text for legibility over any scene: color, size, blur, spread, opacity, strength. Outline, stroke, drop shadow, contrast, readable.'
   },
   {
     tab: 'Overlay',
@@ -1009,6 +1040,12 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
     section: 'Chatters',
     title: 'First-time highlight animation',
     description: 'Border accent when a first-time chatter\'s message lands on the overlay: Sheen (glint sweep), Pulse (border breathes), or Chase (spark orbits the ring). Plays once, or repeats every 5 seconds with the repeat toggle. Animation, sweep, shimmer, border flash, loop.'
+  },
+  {
+    tab: 'Overlay',
+    section: 'Events',
+    title: 'Bits messages',
+    description: 'Show a Twitch cheer on the overlay inline like a normal message, or promote it to an event card like subs and raids. Bits, cheer, gem, tier.'
   },
   {
     tab: 'Overlay',

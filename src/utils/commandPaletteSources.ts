@@ -19,7 +19,7 @@
 // the matcher at query time.
 
 import { invoke } from '@tauri-apps/api/core';
-import { useAppStore, type SettingsTab } from '../stores/AppStore';
+import { useAppStore, clipSourceOf, type SettingsTab } from '../stores/AppStore';
 import { useChatUserStore } from '../stores/chatUserStore';
 import { useSnippetStore } from '../stores/snippetStore';
 import { usePluginUiRegistry } from '../plugins-ui/registry';
@@ -565,6 +565,9 @@ function buildQuickActions(): PaletteItem[] {
             created_at: top.created_at,
             game_id: top.game_id,
             language: top.language,
+            // Chat-replay coordinates. Helix supplies these natively; dropping them
+            // here is what used to leave a palette-played clip without chat.
+            clip_source: clipSourceOf(top),
           });
         } catch (e) {
           Logger.warn('[CommandPalette] top clip fetch failed:', e);
@@ -798,6 +801,7 @@ const SETTINGS_CATALOG: SettingsEntry[] = [
   { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Poll and prediction order', keywords: 'poll prediction both at once same time overlap stack order priority which on top first card overlay position' },
   { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Channel Point Redemptions', keywords: 'channel point redemptions redeem reward no input chat row show hide toggle turn off' },
   { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Collapse gift-sub floods', keywords: 'gift subs gifted collapse flood mystery bomb community batch spam one liner recipients sub gift show hide toggle turn off' },
+  { tab: 'Chat', section: 'Chat Events', sectionId: 'settings-section-chat-events', label: 'Chat replay on clips', keywords: 'clip chat replay historical past chat vod comments beside clip player show hide toggle' },
   { tab: 'Chat', section: 'Chat Logging', keywords: 'chat logging save logs text files folder per channel timestamps events moderation record history' },
   { tab: 'Chat', section: 'Chat Design', keywords: 'chat design font size weight spacing dividers timestamps seconds mention colors reply name separator style prefix colon dot arrow pipe dash chip bracket accent bar pinned message collapse bar alternating backgrounds' },
   { tab: 'Chat', section: 'Link Previews', keywords: 'link preview previews load card url unfurl embed trusted sources shorten links domains clean' },
@@ -836,9 +840,12 @@ const SETTINGS_CATALOG: SettingsEntry[] = [
   // Overlay
   { tab: 'Overlay', keywords: 'stream overlay chat overlay obs streamelements streamlabs browser source on-stream chat box widget multi-platform merged chat emotes 7tv paints badges cosmetics stream chat on screen' },
   { tab: 'Overlay', section: 'Sources', keywords: 'overlay sources platforms twitch kick youtube tiktok merge source tag which platform label dot' },
-  { tab: 'Overlay', section: 'Typography', keywords: 'overlay font family size line height message spacing typography text' },
+  { tab: 'Overlay', section: 'Typography', keywords: 'overlay font family size line height message spacing typography text justify align alignment left center centre right bold italic strikethrough weight light slant crossed out' },
+  { tab: 'Overlay', section: 'Typography', label: 'Justify text', keywords: 'overlay justify align alignment text left center centre right middle position messages' },
+  { tab: 'Overlay', section: 'Typography', label: 'Text style', keywords: 'overlay bold italic strikethrough font weight light regular medium semibold slant crossed out line through message text style' },
   { tab: 'Overlay', section: 'Emotes & Badges', keywords: 'overlay emote size badges show hide scale third-party 7tv ffz chatterino paints streamnook member badge atmosphere cosmetics disable' },
-  { tab: 'Overlay', section: 'Appearance', keywords: 'overlay appearance text color shadow legibility timestamps transparent solid background opacity scene' },
+  { tab: 'Overlay', section: 'Emotes & Badges', label: 'Giant emote placement', keywords: 'overlay giant emote placement gigantify power up align left center right inline below next to username colon position big emote' },
+  { tab: 'Overlay', section: 'Appearance', keywords: 'overlay appearance text color shadow legibility timestamps transparent solid background opacity scene size blur spread strength outline stroke drop shadow contrast readable' },
   { tab: 'Overlay', section: 'Chatters', label: 'Profile pictures', keywords: 'overlay profile pictures avatars pfp youtube tiktok chatter photo show hide toggle' },
   { tab: 'Overlay', section: 'Chatters', label: '@ before usernames', keywords: 'overlay at sign @ username handle youtube strip remove show hide toggle' },
   { tab: 'Overlay', section: 'Messages', label: 'Reply context', keywords: 'overlay replying to reply context line thread show hide toggle remove' },
@@ -846,6 +853,7 @@ const SETTINGS_CATALOG: SettingsEntry[] = [
   { tab: 'Overlay', section: 'Chatters', label: 'Fill the highlight', keywords: 'overlay first time chatter fill tint background highlight transparent color matched' },
   { tab: 'Overlay', section: 'Chatters', label: 'First-time highlight animation', keywords: 'overlay first time chatter animate animation sheen pulse chase sweep shimmer border flash spark highlight one shot repeat loop every 5 seconds' },
   { tab: 'Overlay', section: 'Events', label: 'Event style', keywords: 'overlay event style plain outline streamnook ring tint gradient wash subs gifts raids design look' },
+  { tab: 'Overlay', section: 'Events', label: 'Bits messages', keywords: 'overlay bits cheer message event card display inline promote subs style gem tier' },
   { tab: 'Overlay', section: 'Events', label: 'Show events', keywords: 'overlay show hide events per source per platform twitch youtube tiktok kick filter subs gifts raids bits cheer follows milestones announcements event type toggle' },
   { tab: 'Overlay', section: 'Events', label: 'Fill the outline', keywords: 'overlay event outline fill tint background transparent color matched ring' },
   { tab: 'Overlay', section: 'Chatters', label: 'Highlight color', keywords: 'overlay first time chatter highlight color custom accent pink purple recolor tint' },
