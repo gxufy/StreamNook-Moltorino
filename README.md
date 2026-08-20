@@ -2,13 +2,21 @@
 
 <img src="src-tauri/images/logo.png" alt="StreamNook" width="200" />
 
-# StreamNook
+# StreamNook Bluzyrino
 
-A native Twitch desktop client.
+A StreamNook fork with integrated Bluzyrino chat runtime support.
 
 </div>
 
 ---
+
+## Bluzyrino integration
+
+- Embedded Bluzyrino chat inside StreamNook, following the focused or current Twitch channel.
+- Standalone Bluzyrino launch when a separate chat window is preferred.
+- Fullscreen coordination between StreamNook and Bluzyrino chat.
+- Settings for selecting and configuring the chat runtime.
+- Packaged beta builds use the Bluzyrino runtime.
 
 You're grinding through your 47th hour of that indie roguelike, talking to yourself about optimal build paths, when you realize *I need human voices*. But opening Twitch in a browser? That's like inviting a resource-hungry elephant to sit on your CPU. Your fans spin up, your frame rate tanks, and suddenly you're choosing between watching streams and actually playing games.
 
