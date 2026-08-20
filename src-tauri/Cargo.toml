@@ -1,6 +1,6 @@
 [package]
 name = "StreamNook"
-version = "8.3.10"
+version = "8.4.2"
 description = "StreamNook"
 authors = ["Brandon Winters"]
 license = ""
@@ -123,11 +123,14 @@ windows = { version = "0.61", features = [
     "Win32_Graphics_Dxgi",
     "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
     "Win32_System_Threading",
+    "Win32_System_JobObjects",
     "Win32_System_SystemInformation",
     "Win32_System_IO",
     "Win32_Security",
     "Win32_Storage_FileSystem",
+    "Win32_UI_Accessibility",
     "Win32_UI_WindowsAndMessaging",
 ] }
 
@@ -135,3 +138,10 @@ windows = { version = "0.61", features = [
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+# Local-only beta packaging mode. Flips every build-identity helper in
+# src/build_identity.rs at once: distinct on-disk storage root, distinct keyring
+# service namespace, the self-updater fully disabled, the deep-link scheme
+# switched to streamnook-beta, and the app version sourced from the compile-time
+# STREAMNOOK_BETA_VERSION env var (a beta build fails to compile without it).
+# Not a default feature; production builds never enable it and are unaffected.
+beta-build = []

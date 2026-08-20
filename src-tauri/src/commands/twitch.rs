@@ -648,18 +648,32 @@ pub async fn clear_webview_data(app: AppHandle) -> Result<(), String> {
 
     // 2. Config directory (AppData/Roaming/StreamNook/)
     if let Some(config_dir) = dirs::config_dir() {
-        paths_to_clear.push(config_dir.join("StreamNook").join("EBWebView"));
+        paths_to_clear.push(
+            config_dir
+                .join(crate::build_identity::storage_dir())
+                .join("EBWebView"),
+        );
     }
 
     // 3. Local data directory (AppData/Local/)
     if let Some(local_dir) = dirs::data_local_dir() {
-        paths_to_clear.push(local_dir.join("StreamNook").join("EBWebView"));
-        paths_to_clear.push(local_dir.join("com.streamnook.dev").join("EBWebView"));
+        paths_to_clear.push(
+            local_dir
+                .join(crate::build_identity::storage_dir())
+                .join("EBWebView"),
+        );
+        if !crate::build_identity::is_beta_build() {
+            paths_to_clear.push(local_dir.join("com.streamnook.dev").join("EBWebView"));
+        }
     }
 
     // 4. Roaming data directory
     if let Some(data_dir) = dirs::data_dir() {
-        paths_to_clear.push(data_dir.join("StreamNook").join("EBWebView"));
+        paths_to_clear.push(
+            data_dir
+                .join(crate::build_identity::storage_dir())
+                .join("EBWebView"),
+        );
     }
 
     let mut cleared_any = false;
@@ -703,7 +717,6 @@ pub async fn clear_webview_data(app: AppHandle) -> Result<(), String> {
 fn active_twitch_web_profile_dir() -> Result<PathBuf, String> {
     crate::services::twitch_service::active_twitch_web_profile_dir().map_err(|e| e.to_string())
 }
-
 
 /// JS injected into the Twitch webview so the URL bar tracks where the page
 /// actually is. Twitch is a single-page app: after the first load most route
@@ -856,7 +869,14 @@ fn square_window_corners(win: &tauri::WebviewWindow) {
 /// Reposition/resize the overlay window to the screen rect React measured. Called when
 /// the main window moves or resizes so the content keeps tracking the chrome.
 #[tauri::command]
-pub async fn set_twitch_overlay_bounds(app: AppHandle, label: String, x: f64, y: f64, width: f64, height: f64) {
+pub async fn set_twitch_overlay_bounds(
+    app: AppHandle,
+    label: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+) {
     use tauri::{LogicalPosition, LogicalSize};
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.set_position(LogicalPosition::new(x, y));
@@ -885,7 +905,10 @@ pub fn dismiss_login_overlay(app: &AppHandle, label: &str) {
         let _ = win.close();
     }
     crate::services::ui_hang_watchdog::set_active_overlay(None);
-    let _ = app.emit("twitch-overlay-close", serde_json::json!({ "label": label }));
+    let _ = app.emit(
+        "twitch-overlay-close",
+        serde_json::json!({ "label": label }),
+    );
 }
 
 /// Command form for the frontend completion / Esc handlers.
@@ -1475,8 +1498,7 @@ pub async fn get_user_videos(
 // badges / emotes / segments come out identical to live chat.
 
 const TWITCH_WEB_CLIENT_ID: &str = "kimne78kx3ncx6brgo4mv6wki5h1ko";
-const H_VIDEO_COMMENTS: &str =
-    "b70a3591ff0f4e0313d126c6a1502d79a1c02baebb288227c582044aa76adf6a";
+const H_VIDEO_COMMENTS: &str = "b70a3591ff0f4e0313d126c6a1502d79a1c02baebb288227c582044aa76adf6a";
 
 fn vod_comments_client() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
@@ -1615,14 +1637,21 @@ fn build_vod_comment_line(node: &VcNode, channel_lc: &str) -> String {
                 .user_badges
                 .iter()
                 .filter_map(|b| match (&b.set_id, &b.version) {
-                    (Some(s), Some(v)) if !s.is_empty() => {
-                        Some(format!("{}/{}", sanitize_tag_value(s), sanitize_tag_value(v)))
-                    }
+                    (Some(s), Some(v)) if !s.is_empty() => Some(format!(
+                        "{}/{}",
+                        sanitize_tag_value(s),
+                        sanitize_tag_value(v)
+                    )),
                     _ => None,
                 })
                 .collect::<Vec<_>>()
                 .join(",");
-            (content, emote_groups.join("/"), badges_tag, m.user_color.clone())
+            (
+                content,
+                emote_groups.join("/"),
+                badges_tag,
+                m.user_color.clone(),
+            )
         }
         None => (String::new(), String::new(), String::new(), None),
     };
@@ -1728,8 +1757,7 @@ pub async fn get_vod_comments(
         .collect();
 
     // Same parse path as IVR historical chat, so rendering is byte-identical.
-    let messages =
-        crate::services::irc_service::IrcService::parse_historical_messages(raws).await;
+    let messages = crate::services::irc_service::IrcService::parse_historical_messages(raws).await;
 
     // Offset rode through parsing in the `vod-offset` tag, so read it back per
     // message — no positional zip that a dropped line could desync.
@@ -1951,6 +1979,83 @@ pub async fn start_commercial(broadcaster_id: String, length: u32) -> Result<(),
     TwitchService::start_commercial(&broadcaster_id, length)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_poll(
+    broadcaster_id: String,
+    title: String,
+    choices: Vec<String>,
+    duration: u32,
+    points_per_vote: Option<u32>,
+) -> Result<serde_json::Value, String> {
+    TwitchService::create_poll(&broadcaster_id, &title, &choices, duration, points_per_vote)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn add_blocked_term(
+    broadcaster_id: String,
+    text: String,
+) -> Result<serde_json::Value, String> {
+    TwitchService::add_blocked_term(&broadcaster_id, &text)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn remove_blocked_term(broadcaster_id: String, text: String) -> Result<(), String> {
+    TwitchService::remove_blocked_term(&broadcaster_id, &text)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_active_poll(broadcaster_id: String) -> Result<Option<serde_json::Value>, String> {
+    TwitchService::get_active_poll(&broadcaster_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn end_poll(
+    broadcaster_id: String,
+    poll_id: String,
+    status: String,
+) -> Result<serde_json::Value, String> {
+    TwitchService::end_poll(&broadcaster_id, &poll_id, &status)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn create_prediction(
+    broadcaster_id: String,
+    title: String,
+    outcomes: Vec<String>,
+    window: u32,
+) -> Result<serde_json::Value, String> {
+    TwitchService::create_prediction(&broadcaster_id, &title, &outcomes, window)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn end_prediction(
+    broadcaster_id: String,
+    prediction_id: String,
+    status: String,
+    winning_outcome_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    TwitchService::end_prediction(
+        &broadcaster_id,
+        &prediction_id,
+        &status,
+        winning_outcome_id.as_deref(),
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

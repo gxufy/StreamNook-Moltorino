@@ -157,7 +157,10 @@ impl AccountStore {
         fs::write(&path, Self::xor(json.as_bytes()))?;
 
         // Keyring (backup), keyed by user id. Best-effort, like the primary path.
-        if let Ok(entry) = Entry::new(ACCOUNT_KEYRING_SERVICE, user_id) {
+        if let Ok(entry) = Entry::new(
+            &crate::build_identity::keyring_service(ACCOUNT_KEYRING_SERVICE),
+            user_id,
+        ) {
             let _ = entry.set_password(&json);
         }
         Ok(())
@@ -178,7 +181,10 @@ impl AccountStore {
             }
         }
         // Keyring fallback.
-        if let Ok(entry) = Entry::new(ACCOUNT_KEYRING_SERVICE, user_id) {
+        if let Ok(entry) = Entry::new(
+            &crate::build_identity::keyring_service(ACCOUNT_KEYRING_SERVICE),
+            user_id,
+        ) {
             if let Ok(pwd) = entry.get_password() {
                 if let Ok(token) = serde_json::from_str::<StorableToken>(&pwd) {
                     return Ok(token);
@@ -197,7 +203,10 @@ impl AccountStore {
                 let _ = fs::remove_file(&path);
             }
         }
-        if let Ok(entry) = Entry::new(ACCOUNT_KEYRING_SERVICE, user_id) {
+        if let Ok(entry) = Entry::new(
+            &crate::build_identity::keyring_service(ACCOUNT_KEYRING_SERVICE),
+            user_id,
+        ) {
             let _ = entry.delete_credential();
         }
         Ok(())
@@ -561,9 +570,9 @@ impl AccountStore {
 
         match fs::write(&marker, FORCE_REAUTH_TOKEN) {
             Ok(_) => debug!("[accounts] force-reauth applied; marker written"),
-            Err(e) => warn!(
-                "[accounts] force-reauth: marker write failed; will retry next launch: {e}"
-            ),
+            Err(e) => {
+                warn!("[accounts] force-reauth: marker write failed; will retry next launch: {e}")
+            }
         }
         true
     }
@@ -589,8 +598,13 @@ fn wipe_default_webview_store() {
         .into_iter()
         .flatten()
     {
-        targets.push(root.join("StreamNook").join("EBWebView"));
-        targets.push(root.join("com.streamnook.dev").join("EBWebView"));
+        targets.push(
+            root.join(crate::build_identity::storage_dir())
+                .join("EBWebView"),
+        );
+        if !crate::build_identity::is_beta_build() {
+            targets.push(root.join("com.streamnook.dev").join("EBWebView"));
+        }
     }
 
     for path in targets {

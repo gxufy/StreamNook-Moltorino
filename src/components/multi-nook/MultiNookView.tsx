@@ -26,7 +26,12 @@ import { usemultiNookStore } from '../../stores/multiNookStore';
 import { useTutorialStore } from '../../stores/tutorialStore';
 import { acquireChannel, releaseChannel } from '../../stores/chatConnectionStore';
 import { Logger } from '../../utils/logger';
+import { useVisibleInterval } from '../../utils/useVisibleInterval';
 import { useMultiNookSync } from './useMultiNookSync';
+import {
+  getPlayerFullscreenSnapshot,
+  subscribePlayerFullscreen,
+} from '../../utils/windowFullscreen';
 
 const DOCK_DROP_ID = 'dock-drop-zone';
 const UNDOCK_DROP_ID = 'undock-drop-zone';
@@ -41,7 +46,7 @@ export const MultiNookView: React.FC = () => {
   // any store mutation at all.
   const slots = usemultiNookStore((s) => s.slots);
   const maximizedSlotId = usemultiNookStore((s) => s.maximizedSlotId);
-  const { reorderSlots, dockSlot, undockSlot, batchLoadMissingStreams, setMaximizedSlot } =
+  const { reorderSlots, dockSlot, undockSlot, batchLoadMissingStreams, refreshSlotMetadata, setMaximizedSlot } =
     usemultiNookStore.getState();
   const visibleSlots = useMemo(() => slots.filter((s) => !s.isMinimized), [slots]);
   const minimizedSlots = useMemo(() => slots.filter((s) => s.isMinimized), [slots]);
@@ -125,6 +130,27 @@ export const MultiNookView: React.FC = () => {
       batchLoadMissingStreams();
     }
   }, [slots, batchLoadMissingStreams]);
+
+  // Titles and categories change mid-stream, so poll them. Keyed on the tile set
+  // rather than on `slots` itself: volume drags and focus changes mutate slots
+  // constantly and would restart the interval each time.
+  const loginKey = useMemo(
+    () => slots.map((s) => s.channelLogin.toLowerCase()).sort().join(','),
+    [slots],
+  );
+  useEffect(() => {
+    if (!loginKey) return;
+    // Hold this off the mount frame. Opening a grid already starts up to 25 HLS
+    // proxies at once, and the patch re-renders every tile that gains a title;
+    // landing both together is what starves the main thread and stalls the MSE
+    // appends. Also covers preset loads, which build slots from cached data with
+    // no Twitch round-trip at all.
+    const first = setTimeout(() => void refreshSlotMetadata(), 3_000);
+    return () => clearTimeout(first);
+  }, [loginKey, refreshSlotMetadata]);
+  // Steady-state poll. Purely an on-screen surface, so it pauses while the
+  // window is hidden rather than hitting Helix from the tray.
+  useVisibleInterval(refreshSlotMetadata, 120_000);
 
   // Build a map of slot id -> visual order index for CSS-based reordering.
   const orderMap = useMemo(() => {
@@ -223,19 +249,61 @@ export const MultiNookView: React.FC = () => {
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    let disposed = false;
+    let frame: number | null = null;
+    const initialFullscreen = getPlayerFullscreenSnapshot();
+    let fullscreenBusy = initialFullscreen.active || initialFullscreen.transitioning;
+
+    const commitDimensions = (width: number, height: number) => {
+      setDimensions((current) =>
+        current.width === width && current.height === height ? current : { width, height },
+      );
+    };
+
+    const measureContentBox = () => {
+      const rect = container.getBoundingClientRect();
+      const style = window.getComputedStyle(container);
+      const px = (value: string) => Number.parseFloat(value) || 0;
+      return {
+        width: Math.max(0, rect.width - px(style.paddingLeft) - px(style.paddingRight) - px(style.borderLeftWidth) - px(style.borderRightWidth)),
+        height: Math.max(0, rect.height - px(style.paddingTop) - px(style.paddingBottom) - px(style.borderTopWidth) - px(style.borderBottomWidth)),
+      };
+    };
+
     const observer = new ResizeObserver((entries) => {
-      // Use requestAnimationFrame to avoid "ResizeObserver loop limit exceeded" warning
-      window.requestAnimationFrame(() => {
-        if (!Array.isArray(entries) || !entries.length) return;
-        setDimensions({
-          width: entries[0].contentRect.width,
-          height: entries[0].contentRect.height,
-        });
+      // Use requestAnimationFrame to avoid "ResizeObserver loop limit exceeded" warning.
+      // Re-check fullscreen inside the frame so work queued just before entry cannot
+      // commit an intermediate OS-window size after the transition has started.
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        if (disposed || fullscreenBusy || !Array.isArray(entries) || !entries.length) return;
+        commitDimensions(entries[0].contentRect.width, entries[0].contentRect.height);
       });
     });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    observer.observe(container);
+
+    const unsubscribeFullscreen = subscribePlayerFullscreen((fullscreen) => {
+      const nextBusy = fullscreen.active || fullscreen.transitioning;
+      const justExited = fullscreenBusy && !nextBusy;
+      fullscreenBusy = nextBusy;
+      if (!justExited || disposed) return;
+
+      // All intermediate fullscreen resize entries were ignored. Reconcile once
+      // from the restored container without touching slots or player instances.
+      const content = measureContentBox();
+      commitDimensions(content.width, content.height);
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribeFullscreen();
+      observer.disconnect();
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
   }, [visibleSlots.length]); // re-bind if the entire component shifts dramatically
 
   // Flexbox Optimal Layout Engine

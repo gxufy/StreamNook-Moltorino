@@ -151,6 +151,29 @@ impl Default for StreamlinkSettings {
     }
 }
 
+/// Compatible external/embedded chat-runtime settings. The legacy serialized
+/// object name is retained so existing beta settings round-trip unchanged. The
+/// optional absolute executable path is machine-local, so this group is excluded
+/// from portable settings backups — see NON_PORTABLE_KEYS.
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct MoltorinoSettings {
+    /// Absolute path to a compatible chat-runtime executable. None/empty uses the
+    /// bundled runtime when present.
+    #[serde(default)]
+    pub executable_path: Option<String>,
+    /// Whether the "Open in chat runtime" action shows in the chat header.
+    /// Defaults to false: the integration is opt-in and StreamNook's native chat
+    /// stays the default with no new UI until the user asks for it.
+    #[serde(default)]
+    pub show_chat_button: bool,
+    /// Use the chat runtime *embedded* in the main chat area instead of the native
+    /// chat panel. Defaults to false so native chat stays the default and old
+    /// settings.json files (which lack this key) load unchanged. Requires a bundled
+    /// or configured compatible runtime.
+    #[serde(default)]
+    pub embedded_chat: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ChatDesignSettings {
     pub show_dividers: bool,
@@ -185,6 +208,12 @@ pub struct ChatDesignSettings {
     pub compact_emote_tooltips: bool,
     #[serde(default = "default_true")]
     pub ffz_emote_effects: bool,
+    #[serde(default = "default_true")]
+    pub bttv_emote_modifiers: bool,
+    /// Render the last emote of a "Gigantify an Emote" power-up message
+    /// (msg-id gigantified-emote-message) at 4x below the message body.
+    #[serde(default = "default_true")]
+    pub giant_emotes: bool,
     /// Which half of the user card opens first: their recent messages (default)
     /// or the profile body.
     #[serde(default = "default_true")]
@@ -273,6 +302,8 @@ impl Default for ChatDesignSettings {
             paint_mentions_in_body: true,
             compact_emote_tooltips: false,
             ffz_emote_effects: true,
+            bttv_emote_modifiers: true,
+            giant_emotes: true,
             user_card_opens_messages: true,
             seventv_emote_notices: true,
             link_previews: true,
@@ -510,6 +541,13 @@ pub struct Settings {
     /// day), written by services::chat_logger_service.
     #[serde(default)]
     pub chat_logging: ChatLoggingSettings,
+    /// Compatible chat-runtime integration (opt-in, machine-local).
+    #[serde(default)]
+    pub moltorino: MoltorinoSettings,
+    /// What closing the main window does. Modelled here rather than left to
+    /// `extra` because the window-event handler in main.rs reads it.
+    #[serde(default)]
+    pub close_to_tray: CloseToTrayMode,
     /// Catch-all for preference groups the frontend manages but this struct does
     /// not model field-by-field: highlight phrases, custom chat commands,
     /// moderation prefs, custom themes, the OLED accent, and any future ones.
@@ -555,6 +593,8 @@ impl Default for Settings {
             show_mod_logs: false,
             keybindings: HashMap::new(),
             chat_logging: ChatLoggingSettings::default(),
+            moltorino: MoltorinoSettings::default(),
+            close_to_tray: CloseToTrayMode::default(),
             extra: HashMap::new(),
         }
     }
@@ -571,6 +611,23 @@ pub struct ChatLogChannel {
     pub channel_login: String,
     #[serde(default)]
     pub display_name: String,
+}
+
+/// What the main window's close button does.
+///
+/// `WithPopouts` is the long-standing behavior and stays the default: closing
+/// hides to the tray only while MultiChat popouts are open, because quitting
+/// would take them with it. The other two make the choice explicit.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum CloseToTrayMode {
+    /// Hide to the tray only when MultiChat popouts are open.
+    #[default]
+    WithPopouts,
+    /// Always hide to the tray. Quit from the tray menu.
+    Always,
+    /// Always quit, even with popouts open.
+    Never,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

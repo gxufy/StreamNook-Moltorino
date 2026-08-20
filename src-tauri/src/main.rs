@@ -31,15 +31,14 @@ use commands::{
     badges::*, cache::*, channel_panels::*, chat::*, chat_identity::*, components::*,
     cosmetics_cache::*, diagnostic_logging::*, discord::*, drops::*, emoji::*, emote_prefetch::*,
     emotes::*, eventsub::*, ffz::*, hype_train::*, identity::*, justlog::*, layout::*,
-    link_preview::*, logs::*, mod_log_storage::*, modroom::*, multi_nook::*, plugins::*,
-    profile_cache::*,
-    resub::*, screen_capture::*, session::*, settings::*, seventv::*, seventv_cosmetics::*,
-    seventv_cosmetics_fetch::*, song_id::*, streaming::*, subscriptions::*, twitch::*,
-    universal_cache::*,
-    user_profile::*, watch_streak::*, whisper_storage::*,
+    link_preview::*, logs::*, mod_log_storage::*, modroom::*, moltorino::*, moltorino_embed::*,
+    multi_nook::*, plugins::*, profile_cache::*, resub::*, screen_capture::*, session::*,
+    settings::*, seventv::*, seventv_cosmetics::*, seventv_cosmetics_fetch::*, song_id::*,
+    streaming::*, subscriptions::*, twitch::*, universal_cache::*, user_profile::*,
+    watch_streak::*, whisper_storage::*,
 };
 use log::{debug, error};
-use models::settings::{AppState, Settings};
+use models::settings::{AppState, CloseToTrayMode, Settings};
 use services::background_service::BackgroundService;
 use services::cache_service;
 use services::drops_service::DropsService;
@@ -66,7 +65,7 @@ struct PendingWatchLink(Mutex<Option<String>>);
 /// `streamnook://<channel>` fallback. Returns a sanitized login (lowercase,
 /// `[a-z0-9_]`) or None when there's nothing watchable in the URL.
 fn parse_watch_link(url: &tauri::Url) -> Option<String> {
-    if url.scheme() != "streamnook" {
+    if url.scheme() != crate::build_identity::deep_link_scheme() {
         return None;
     }
     // The action ("watch"/"w") is the URL authority; the channel is the first
@@ -135,13 +134,13 @@ fn show_main_window(app: &tauri::AppHandle) {
         tauri::WebviewUrl::App("index.html".into())
     };
     match tauri::WebviewWindowBuilder::new(app, "main", app_url)
-        .title("StreamNook")
-    .inner_size(1600.0, 1000.0)
-    .min_inner_size(800.0, 600.0)
-    .center()
-    .resizable(true)
-    .decorations(false)
-    .build()
+        .title(crate::build_identity::display_name())
+        .inner_size(1600.0, 1000.0)
+        .min_inner_size(800.0, 600.0)
+        .center()
+        .resizable(true)
+        .decorations(false)
+        .build()
     {
         Ok(win) => {
             debug!("[Main] Recreated main window on demand");
@@ -154,6 +153,49 @@ fn show_main_window(app: &tauri::AppHandle) {
         }
         Err(e) => error!("[Main] Failed to recreate main window: {e}"),
     }
+}
+
+/// Pull an oversized saved restore rect back inside the monitor's work area.
+///
+/// Only the size is corrected, and `showCmd` is untouched, so a window that restored
+/// maximized stays maximized with no flash and only its restore geometry changes.
+/// Keeping left/top also sidesteps the workspace-vs-screen coordinate ambiguity of
+/// `rcNormalPosition`.
+#[cfg(windows)]
+fn sanitize_restore_rect(window: &tauri::WebviewWindow) {
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowPlacement, SetWindowPlacement, WINDOWPLACEMENT,
+    };
+
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return;
+    };
+    let work = monitor.work_area();
+    let Ok(raw) = window.hwnd() else {
+        return;
+    };
+    let hwnd = HWND(raw.0 as *mut std::ffi::c_void);
+
+    let mut placement = WINDOWPLACEMENT {
+        length: std::mem::size_of::<WINDOWPLACEMENT>() as u32,
+        ..Default::default()
+    };
+    if unsafe { GetWindowPlacement(hwnd, &mut placement) }.is_err() {
+        return;
+    }
+
+    let r = placement.rcNormalPosition;
+    let (w, h) = (r.right - r.left, r.bottom - r.top);
+    let (max_w, max_h) = (work.size.width as i32, work.size.height as i32);
+    if w <= max_w && h <= max_h {
+        return;
+    }
+
+    placement.rcNormalPosition.right = r.left + w.min(max_w);
+    placement.rcNormalPosition.bottom = r.top + h.min(max_h);
+    let _ = unsafe { SetWindowPlacement(hwnd, &placement) };
+    debug!("[Main] Clamped oversized restore rect to the monitor work area");
 }
 
 /// Get-or-create the main window. Invoked from a MultiChat popout when an action
@@ -177,6 +219,7 @@ fn close_main_window(app: tauri::AppHandle) {
     }
 }
 
+mod build_identity;
 mod commands;
 mod models;
 mod plugin_host;
@@ -424,6 +467,11 @@ fn main() {
         .manage(eventsub_service_state)
         .setup(move |app| {
             let app_handle = app.handle().clone();
+            // The config-created window inherits the production title from the base
+            // config, so apply the build identity after Tauri creates it.
+            if let Some(main) = app.get_webview_window("main") {
+                main.set_title(crate::build_identity::display_name())?;
+            }
             // Runtime stall detector: measures backend freezes (tokio-blocked vs
             // whole-process) and records them to the capture file. Started here,
             // inside the tokio runtime Tauri set up.
@@ -438,6 +486,19 @@ fn main() {
                     if let Ok(hwnd) = main.hwnd() {
                         services::ui_hang_watchdog::start_for_hwnd(hwnd.0 as isize);
                     }
+                }
+            }
+            // A build before the logical-units fix could resize the window past the
+            // screen, and the window-state plugin persists that rect because it only
+            // skips saving while maximized. Correcting rcNormalPosition rather than the
+            // live size also covers the case where the user quit while maximized, where
+            // the oversized rect stays invisible until the next unmaximize or drag.
+            // Config windows are built before this setup hook runs and the plugin
+            // restores in its on_window_ready callback, so the state is already applied.
+            #[cfg(windows)]
+            {
+                if let Some(main) = app.get_webview_window("main") {
+                    sanitize_restore_rect(&main);
                 }
             }
             // Hand the stream server an app handle so the ad auto-pivot can emit
@@ -640,7 +701,8 @@ fn main() {
             // window while StreamNook MultiChat popouts are still open. Left
             // click brings the main window forward; right click opens a menu
             // with Show / Open MultiChat / Quit.
-            let show_item = MenuItem::with_id(app, "show", "Show StreamNook", true, None::<&str>)?;
+            let show_label = format!("Show {}", crate::build_identity::display_name());
+            let show_item = MenuItem::with_id(app, "show", show_label, true, None::<&str>)?;
             let open_multichat_item = MenuItem::with_id(
                 app,
                 "open_multichat",
@@ -649,7 +711,8 @@ fn main() {
                 None::<&str>,
             )?;
             let sep = PredefinedMenuItem::separator(app)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit StreamNook", true, None::<&str>)?;
+            let quit_label = format!("Quit {}", crate::build_identity::display_name());
+            let quit_item = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
             let tray_menu = Menu::with_items(
                 app,
                 &[&show_item, &open_multichat_item, &sep, &quit_item],
@@ -658,7 +721,7 @@ fn main() {
             let _tray = TrayIconBuilder::new()
                 .menu(&tray_menu)
                 .show_menu_on_left_click(false)
-                .tooltip("StreamNook")
+                .tooltip(crate::build_identity::display_name())
                 .icon(app.default_window_icon().unwrap().clone())
                 .on_menu_event(|app_handle, event| match event.id.as_ref() {
                     "show" => show_main_window(app_handle),
@@ -705,6 +768,7 @@ fn main() {
             close_main_window,
             calculate_aspect_ratio_size,
             calculate_aspect_ratio_size_preserve_video,
+            start_titlebar_drag,
             get_system_info,
             get_emoji_image,
             read_clipboard_text_native,
@@ -809,6 +873,8 @@ fn main() {
             // Chat commands
             start_chat,
             stop_chat,
+            get_chat_lifecycle_log,
+            debug_break_chat_socket,
             send_chat_message,
             join_chat_channel,
             leave_chat_channel,
@@ -868,6 +934,13 @@ fn main() {
             start_commercial,
             start_raid,
             cancel_raid,
+            add_blocked_term,
+            remove_blocked_term,
+            create_poll,
+            get_active_poll,
+            end_poll,
+            create_prediction,
+            end_prediction,
             create_stream_marker,
             warn_chat_user,
             update_shield_mode,
@@ -1148,13 +1221,30 @@ fn main() {
             plugins_provides,
             plugins_report_stream_event,
             plugins_ui_bundle,
+            // Generic compatible chat-runtime commands
+            validate_chat_runtime_path,
+            launch_chat_runtime,
+            chat_runtime_status,
+            chat_runtime_embed_start,
+            chat_runtime_embed_set_bounds,
+            chat_runtime_embed_set_channel,
+            chat_runtime_embed_stop,
+            // Legacy IPC names retained as wrappers over the same runtime state
+            validate_moltorino_path,
+            launch_moltorino,
+            moltorino_runtime_status,
+            moltorino_embed_start,
+            moltorino_embed_set_bounds,
+            moltorino_embed_set_channel,
+            moltorino_embed_stop,
         ])
         // Window-event handler. Two behaviors:
         //
-        // 1. Main window close: if any StreamNook MultiChat popouts are open,
-        //    intercept the close and hide the window to the tray instead.
-        //    Process keeps running, popouts stay alive. If no popouts exist,
-        //    the close proceeds normally (full exit).
+        // 1. Main window close: hide to the tray instead of exiting, per the
+        //    user's Close button preference. The default only hides while
+        //    MultiChat popouts are open (quitting would take them with it);
+        //    Always hides every time, Never always exits. When we hide, the
+        //    process keeps running and popouts stay alive.
         //
         // 2. Popout destroyed: when a popout closes, if it was the last
         //    popout AND the main window is currently hidden (i.e. the user
@@ -1189,9 +1279,21 @@ fn main() {
                         .webview_windows()
                         .iter()
                         .any(|(l, _)| l.starts_with("multichat-"));
-                    if popouts_open {
+                    // Settings can be poisoned or momentarily locked; falling
+                    // back to the default keeps close working either way.
+                    let mode = app_handle
+                        .try_state::<AppState>()
+                        .and_then(|s| s.settings.lock().ok().map(|g| g.close_to_tray))
+                        .unwrap_or_default();
+                    let hide_to_tray = match mode {
+                        CloseToTrayMode::Always => true,
+                        CloseToTrayMode::Never => false,
+                        CloseToTrayMode::WithPopouts => popouts_open,
+                    };
+                    if hide_to_tray {
                         debug!(
-                            "[Main] Close requested with popouts open — hiding main to tray"
+                            "[Main] Close requested (mode {:?}, popouts_open {}) — hiding main to tray",
+                            mode, popouts_open
                         );
                         api.prevent_close();
                         if let Some(main_win) = app_handle.get_webview_window("main") {
@@ -1228,11 +1330,23 @@ fn main() {
                         // main to free its memory). A destroyed main returns None
                         // here, so treat None as "gone"; otherwise the process would
                         // linger with no windows.
-                        let main_gone_or_hidden = match app_handle.get_webview_window("main") {
-                            Some(main_win) => !main_win.is_visible().unwrap_or(true),
+                        //
+                        // A hidden-but-alive main is only a reason to exit when the
+                        // user hasn't asked to always live in the tray. Under
+                        // `Always` they expect to quit from the tray menu, so
+                        // closing their last popout must not take the app with it.
+                        // A destroyed main still exits in every mode: there is no
+                        // window left to restore.
+                        let always_tray = app_handle
+                            .try_state::<AppState>()
+                            .and_then(|s| s.settings.lock().ok().map(|g| g.close_to_tray))
+                            .unwrap_or_default()
+                            == CloseToTrayMode::Always;
+                        let should_exit = match app_handle.get_webview_window("main") {
+                            Some(main_win) => !main_win.is_visible().unwrap_or(true) && !always_tray,
                             None => true,
                         };
-                        if main_gone_or_hidden {
+                        if should_exit {
                             debug!("[Main] Last MultiChat closed while main hidden/closed — exiting");
                             app_handle.exit(0);
                         }
@@ -1244,6 +1358,15 @@ fn main() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
+                // Tear down the embedded chat-runtime host (kills only the process
+                // and destroys only the window StreamNook created) so shutdown
+                // never leaves an orphaned runtime behind. Blocks until the
+                // owning thread confirms the kill. No-op if never used.
+                commands::moltorino_embed::moltorino_embed_stop_sync();
+                // Terminate every standalone chat runtime this instance launched,
+                // by its exact retained handle (never by PID or image name), so an
+                // external-chat launch can't outlive StreamNook.
+                commands::moltorino::shutdown_all_standalone();
                 // Ask running plugin processes to shut down before the app
                 // process dies, waiting briefly so well-behaved plugins exit
                 // gracefully (stragglers are killed with the supervisor).
@@ -1258,6 +1381,13 @@ fn main() {
                         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     }
                 });
+                // Close the shared Job Object last, after the explicit kill+wait
+                // paths above have already run. With KILL_ON_JOB_CLOSE this is a
+                // final safety net that can only ever terminate children we
+                // ourselves assigned to the job. No-op if the job was never
+                // created (no chat runtime was ever spawned).
+                #[cfg(windows)]
+                commands::moltorino::jobobject::close();
             }
         });
 }

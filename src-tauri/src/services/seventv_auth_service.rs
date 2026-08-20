@@ -37,7 +37,7 @@ impl SevenTVAuthService {
     fn get_token_file_path() -> Result<PathBuf> {
         let mut path =
             dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
-        path.push("StreamNook");
+        path.push(crate::build_identity::storage_dir());
 
         if !path.exists() {
             fs::create_dir_all(&path)?;
@@ -318,7 +318,7 @@ impl SevenTVAuthService {
     fn account_token_file_path(twitch_id: &str) -> Result<PathBuf> {
         let mut path =
             dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Could not find config directory"))?;
-        path.push("StreamNook");
+        path.push(crate::build_identity::storage_dir());
         if !path.exists() {
             fs::create_dir_all(&path)?;
         }

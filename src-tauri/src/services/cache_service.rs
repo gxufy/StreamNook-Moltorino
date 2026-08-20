@@ -41,7 +41,7 @@ pub fn get_app_data_dir() -> Result<PathBuf> {
     } else {
         // debug!("[CacheService] Running in RELEASE mode, using StreamNook");
         // In production, use StreamNook (without space, matching the actual folder name)
-        PathBuf::from(local_app_data).join("StreamNook")
+        PathBuf::from(local_app_data).join(crate::build_identity::storage_dir())
     };
 
     // Create the directory if it doesn't exist
