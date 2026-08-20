@@ -15,7 +15,7 @@
 [CmdletBinding()]
 param(
     [string] $RuntimeRoot = "C:\Dev\Bluzyrino_staged",
-    [string] $BetaVersion = "8.4.0-beta.2",
+    [string] $BetaVersion = "8.4.2-beta.1",
     [string] $OutputRoot = "C:\Dev\StreamNook-Bluzyrino-Staging\app-output"
 )
 
