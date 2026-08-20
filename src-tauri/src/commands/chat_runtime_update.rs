@@ -14,6 +14,9 @@ use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 use url::Url;
 
+#[path = "chat_runtime_update_transaction.rs"]
+mod transaction;
+
 const RUNTIME_MANIFEST_NAME: &str = "runtime-manifest.json";
 const RUNTIME_ID: &str = "bluzyrino";
 const RUNTIME_ENTRYPOINT: &str = "Bluzyrino.exe";
@@ -34,6 +37,46 @@ const MAX_ARCHIVE_SIZE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_EXPANDED_SIZE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_RUNTIME_FILE_COUNT: u64 = 10_000;
 const MAX_RELEASE_NOTES_CHARS: usize = 20_000;
+
+/// Serializes bundled-runtime launch establishment with install-side mutation.
+/// Callers must acquire this before either owned-child registry mutex.
+pub(crate) fn runtime_update_gate() -> &'static std::sync::Mutex<()> {
+    use std::sync::{Mutex, OnceLock};
+    static GATE: OnceLock<Mutex<()>> = OnceLock::new();
+    GATE.get_or_init(|| Mutex::new(()))
+}
+
+fn with_runtime_update_gate<T>(
+    gate: &std::sync::Mutex<()>,
+    stop_standalone: impl FnOnce() -> Result<(), String>,
+    stop_embed: impl FnOnce() -> Result<(), String>,
+    mutate: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    // Global order: update gate → standalone registry → embed registry. Each stop
+    // helper releases its registry before the next helper or mutation begins.
+    let _guard = gate
+        .lock()
+        .map_err(|_| "Chat runtime update lock is unavailable.".to_string())?;
+    stop_standalone()?;
+    stop_embed()?;
+    mutate()
+}
+
+/// Run install-side mutation only after all StreamNook-owned children launched
+/// from the bundled Bluzyrino tree have been stopped and reaped. Custom and legacy
+/// children are deliberately left running. The concrete install transaction is
+/// supplied by Phase 4B1-B; this is its shared launch/update exclusion boundary.
+#[allow(dead_code)]
+pub(crate) fn with_bundled_runtime_update<T>(
+    mutate: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    with_runtime_update_gate(
+        runtime_update_gate(),
+        super::moltorino::stop_owned_bundled_standalone_for_update,
+        super::moltorino_embed::stop_owned_bundled_embed_for_update,
+        mutate,
+    )
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -114,7 +157,7 @@ pub(crate) fn validate_installed_runtime(
         if !listed_paths.insert(file.path.clone()) {
             return Err(format!("Duplicate runtime manifest path: {}", file.path));
         }
-        let folded = file.path.to_lowercase();
+        let folded = transaction::windows_path_key(&file.path)?;
         if let Some(previous) = listed_casefolded.insert(folded, file.path.clone()) {
             return Err(format!(
                 "Case-insensitive runtime manifest path collision: {previous} and {}",
@@ -286,7 +329,7 @@ fn inventory_runtime_tree(runtime_root: &Path) -> Result<HashMap<String, String>
                 if relative == RUNTIME_MANIFEST_NAME {
                     continue;
                 }
-                let folded = relative.to_lowercase();
+                let folded = transaction::windows_path_key(&relative)?;
                 if let Some(previous) = files.insert(folded, relative.clone()) {
                     return Err(format!(
                         "Case-insensitive runtime disk path collision: {previous} and {relative}"
@@ -333,25 +376,25 @@ fn validate_sha256(value: &str, label: &str) -> Result<(), String> {
 /// Dormant contract for a possible future gxufy-hosted runtime feed.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RuntimeUpdateManifest {
-    schema_version: u64,
-    runtime_id: String,
-    channel: String,
-    version: String,
-    platform: String,
-    architecture: String,
-    archive_url: String,
-    archive_name: String,
-    archive_sha256: String,
-    archive_size_bytes: u64,
-    archive_format: String,
-    archive_root: String,
-    runtime_manifest_sha256: String,
-    entrypoint: String,
-    minimum_streamnook_version: String,
-    maximum_expanded_size_bytes: u64,
-    maximum_file_count: u64,
-    release_notes: String,
+pub(super) struct RuntimeUpdateManifest {
+    pub(super) schema_version: u64,
+    pub(super) runtime_id: String,
+    pub(super) channel: String,
+    pub(super) version: String,
+    pub(super) platform: String,
+    pub(super) architecture: String,
+    pub(super) archive_url: String,
+    pub(super) archive_name: String,
+    pub(super) archive_sha256: String,
+    pub(super) archive_size_bytes: u64,
+    pub(super) archive_format: String,
+    pub(super) archive_root: String,
+    pub(super) runtime_manifest_sha256: String,
+    pub(super) entrypoint: String,
+    pub(super) minimum_streamnook_version: String,
+    pub(super) maximum_expanded_size_bytes: u64,
+    pub(super) maximum_file_count: u64,
+    pub(super) release_notes: String,
 }
 
 /// Parse and validate the dormant update contract against the running build.
@@ -381,7 +424,7 @@ fn parse_runtime_update_manifest_for_versions(
     )
 }
 
-fn validate_runtime_update_manifest(
+pub(super) fn validate_runtime_update_manifest(
     manifest: &RuntimeUpdateManifest,
     installed_runtime_version: &str,
     current_streamnook_version: &str,
@@ -634,6 +677,62 @@ mod tests {
             installed,
             streamnook,
         )
+    }
+
+    #[test]
+    fn update_gate_orders_selective_stops_before_mutation() {
+        let gate = std::sync::Mutex::new(());
+        let calls = std::sync::Mutex::new(Vec::new());
+
+        let result = with_runtime_update_gate(
+            &gate,
+            || {
+                assert!(gate.try_lock().is_err());
+                calls.lock().unwrap().push("standalone");
+                Ok(())
+            },
+            || {
+                assert!(gate.try_lock().is_err());
+                calls.lock().unwrap().push("embed");
+                Ok(())
+            },
+            || {
+                assert!(gate.try_lock().is_err());
+                calls.lock().unwrap().push("mutation");
+                Ok(42)
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result, 42);
+        assert_eq!(*calls.lock().unwrap(), ["standalone", "embed", "mutation"]);
+        assert!(gate.try_lock().is_ok());
+    }
+
+    #[test]
+    fn update_gate_fails_closed_before_mutation_when_reap_fails() {
+        let gate = std::sync::Mutex::new(());
+        let embed_called = std::cell::Cell::new(false);
+        let mutation_called = std::cell::Cell::new(false);
+
+        let error = with_runtime_update_gate(
+            &gate,
+            || Err("standalone reap failed".to_string()),
+            || {
+                embed_called.set(true);
+                Ok(())
+            },
+            || {
+                mutation_called.set(true);
+                Ok(())
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error, "standalone reap failed");
+        assert!(!embed_called.get());
+        assert!(!mutation_called.get());
+        assert!(gate.try_lock().is_ok());
     }
 
     #[test]

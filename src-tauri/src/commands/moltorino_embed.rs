@@ -243,6 +243,12 @@ pub fn is_current_child(event_hwnd: isize, current_child: Option<isize>) -> bool
     current_child == Some(event_hwnd)
 }
 
+fn updater_selects_provenance(
+    provenance: crate::commands::moltorino::ChatRuntimeProvenance,
+) -> bool {
+    provenance.is_bundled_bluzyrino()
+}
+
 // ---------------------------------------------------------------------------
 // Windows implementation.
 // ---------------------------------------------------------------------------
@@ -254,7 +260,7 @@ mod imp {
         parse_created_window, should_refit_child,
     };
     use crate::commands::moltorino::{
-        display_path, is_valid_twitch_login, resolve_moltorino_runtime,
+        display_path, is_valid_twitch_login, ChatRuntimeProvenance, ResolvedChatRuntime,
     };
     use std::ffi::c_void;
     use std::path::Path;
@@ -319,8 +325,12 @@ mod imp {
         },
         /// Follow a new Twitch channel (already lowercased + validated).
         Channel(String),
-        /// Tear everything down: kill our process, destroy our window, quit loop.
+        /// Tear everything down for UI/app shutdown (best effort, with the Job
+        /// Object as the process-exit backstop).
         Shutdown,
+        /// Updater teardown must confirm exact termination and reaping before any
+        /// bundled files may be mutated. On failure the host and ownership remain.
+        ShutdownForUpdate(Sender<Result<(), String>>),
     }
 
     /// Lives on the message-loop thread, reached from the WndProc via
@@ -392,13 +402,16 @@ mod imp {
     /// What the command layer keeps so it can reach a running host.
     struct EmbedHandle {
         host: isize,
+        provenance: ChatRuntimeProvenance,
         tx: Sender<Cmd>,
+        /// True after a synchronous updater teardown starts. The handle remains in
+        /// the slot while we wait (without holding `embed()`), preventing another
+        /// start from reusing or replacing a host whose child is still shutting down.
+        shutting_down: bool,
         /// Fired by the message-loop thread from `WM_DESTROY` once teardown is
-        /// fully done (child killed+reaped, window destroyed). The synchronous
-        /// app-exit path ([`stop_blocking`]) waits on this so StreamNook never
-        /// exits out from under a not-yet-killed Moltorino — the race that left an
-        /// orphaned embedded process behind.
-        done_rx: Receiver<()>,
+        /// fully done (child killed+reaped, window destroyed). Shared only so a
+        /// selective updater stop can leave ownership in `embed()` while waiting.
+        done_rx: Arc<Mutex<Receiver<()>>>,
     }
 
     fn embed() -> &'static Mutex<Option<EmbedHandle>> {
@@ -1155,6 +1168,42 @@ mod imp {
         }
     }
 
+    fn terminate_embedded_process(state: &mut HostState) -> Result<(), String> {
+        let Some(proc) = state.child_proc.as_mut() else {
+            return Ok(());
+        };
+        match proc.try_wait() {
+            Ok(Some(_)) => {
+                state.child_proc = None;
+                return Ok(());
+            }
+            Ok(None) => {}
+            Err(error) => {
+                return Err(format!(
+                    "Couldn't determine whether the embedded chat runtime exited: {error}"
+                ));
+            }
+        }
+        if let Err(kill_error) = proc.kill() {
+            return match proc.try_wait() {
+                Ok(Some(_)) => {
+                    state.child_proc = None;
+                    Ok(())
+                }
+                Ok(None) => Err(format!(
+                    "Couldn't terminate the embedded chat runtime: {kill_error}"
+                )),
+                Err(wait_error) => Err(format!(
+                    "Couldn't terminate the embedded chat runtime ({kill_error}) or confirm it exited ({wait_error})"
+                )),
+            };
+        }
+        proc.wait()
+            .map_err(|error| format!("Couldn't reap the embedded chat runtime: {error}"))?;
+        state.child_proc = None;
+        Ok(())
+    }
+
     unsafe fn drain_commands(hwnd: HWND) {
         let ptr = state_ptr(hwnd);
         if ptr.is_null() {
@@ -1181,12 +1230,29 @@ mod imp {
                     // Restore the WebView before we destroy anything, so the panel
                     // area is never left as a blank, input-swallowing hole.
                     restore_webview(state, "shutdown");
-                    if let Some(mut proc) = state.child_proc.take() {
-                        let _ = proc.kill();
-                        let _ = proc.wait();
+                    if let Err(error) = terminate_embedded_process(state) {
+                        log::warn!("[Moltorino] embedded shutdown cleanup failed: {error}");
                     }
                     let _ = DestroyWindow(state.host);
                     return;
+                }
+                Cmd::ShutdownForUpdate(result_tx) => {
+                    state.shutting_down = true;
+                    match terminate_embedded_process(state) {
+                        Ok(()) => {
+                            remove_win_event_hook(state, "runtime-update");
+                            restore_webview(state, "runtime-update");
+                            let _ = result_tx.send(Ok(()));
+                            let _ = DestroyWindow(state.host);
+                            return;
+                        }
+                        Err(error) => {
+                            // Do not destroy the host or discard the process handle:
+                            // the updater must fail closed and retain exact ownership.
+                            state.shutting_down = false;
+                            let _ = result_tx.send(Err(error));
+                        }
+                    }
                 }
             }
         }
@@ -1581,23 +1647,51 @@ mod imp {
         height: i32,
         visible: bool,
         source_hwnd: isize,
-        exe_path: &str,
+        configured: &str,
         app: AppHandle,
     ) -> Result<(), String> {
         let channel = channel.trim().to_ascii_lowercase();
         if !is_valid_twitch_login(&channel) {
             return Err(format!("\"{channel}\" isn't a valid Twitch channel name."));
         }
-        // Shared runtime picker: a valid configured override wins, else the copy
-        // bundled beside StreamNook, else a clear not-found error (surfaced to the
-        // UI as a native-chat fallback). Resolving before we touch the embed lock
-        // keeps a bad path from ever creating a host window.
-        let runtime = resolve_moltorino_runtime(exe_path)?;
+        // Always take the shared gate before inspecting the embed registry. A
+        // custom request can reuse an already-running bundled host, so gating only
+        // from the newly resolved path would let that reuse race updater teardown.
+        let _gate = crate::commands::chat_runtime_update::runtime_update_gate()
+            .lock()
+            .map_err(|_| "Chat runtime update lock is unavailable.".to_string())?;
+        let runtime = crate::commands::moltorino::resolve_chat_runtime(configured)?;
+        start_resolved(
+            channel,
+            x,
+            y,
+            width,
+            height,
+            visible,
+            source_hwnd,
+            runtime,
+            app,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn start_resolved(
+        channel: String,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        visible: bool,
+        source_hwnd: isize,
+        runtime: ResolvedChatRuntime,
+        app: AppHandle,
+    ) -> Result<(), String> {
         log::debug!(
             "[Moltorino] embed runtime resolved: source={} path={}",
             runtime.source_status(),
             display_path(&runtime.executable_path)
         );
+        let provenance = runtime.provenance();
         let exe = runtime.executable_path;
 
         let mut guard = embed()
@@ -1605,6 +1699,9 @@ mod imp {
             .map_err(|_| "embed lock poisoned".to_string())?;
 
         if let Some(handle) = guard.as_ref() {
+            if handle.shutting_down {
+                return Err("The embedded chat runtime is still shutting down.".to_string());
+            }
             // Reuse: push the latest bounds + channel into the running host.
             let _ = handle.tx.send(Cmd::Bounds {
                 x,
@@ -1645,8 +1742,10 @@ mod imp {
             Ok(Ok(host)) => {
                 *guard = Some(EmbedHandle {
                     host,
+                    provenance,
                     tx: cmd_tx,
-                    done_rx,
+                    shutting_down: false,
+                    done_rx: Arc::new(Mutex::new(done_rx)),
                 });
                 Ok(())
             }
@@ -1662,6 +1761,16 @@ mod imp {
                 if published != 0 {
                     let _ = cmd_tx.send(Cmd::Shutdown);
                     wake(published);
+                    // Keep exact ownership until teardown is observed. The host may
+                    // already have spawned its child even though readiness timed out;
+                    // retaining this handle lets app-exit or an updater wait/retry.
+                    *guard = Some(EmbedHandle {
+                        host: published,
+                        provenance,
+                        tx: cmd_tx,
+                        shutting_down: true,
+                        done_rx: Arc::new(Mutex::new(done_rx)),
+                    });
                 }
                 Err("Timed out starting the embedded Moltorino host.".to_string())
             }
@@ -1716,6 +1825,11 @@ mod imp {
     /// runtime and must not block it. The app-exit path uses [`stop_blocking`]
     /// instead, which waits for the teardown to actually finish.
     pub fn stop() -> Result<(), String> {
+        // Match launch/update lock order even for UI teardown. Without the gate,
+        // stop could remove the embed handle while an updater is selecting it.
+        let _gate = crate::commands::chat_runtime_update::runtime_update_gate()
+            .lock()
+            .map_err(|_| "Chat runtime update lock is unavailable.".to_string())?;
         let mut guard = embed()
             .lock()
             .map_err(|_| "embed lock poisoned".to_string())?;
@@ -1726,22 +1840,91 @@ mod imp {
         Ok(())
     }
 
-    /// Synchronous teardown for application exit. Posts `Cmd::Shutdown`, wakes the
-    /// message-loop thread, then *waits* for that thread to confirm it has killed
-    /// and reaped Moltorino and destroyed the host window (signalled via
-    /// `done_rx`). This closes the shutdown race that left an orphaned embedded
-    /// Moltorino behind: previously `stop()` only posted the command and returned,
-    /// so StreamNook could exit — and the OS tear the process down — before the
-    /// thread had run the kill.
-    ///
-    /// Bounded wait: if the thread doesn't confirm within the timeout (a wedged
-    /// Moltorino message pump, say), we log and return rather than hang shutdown.
-    /// The Job Object backstop still guarantees the child dies moments later when
-    /// our process — and thus our sole job handle — goes away. Never panics.
+    fn wait_for_teardown(
+        done_rx: &Arc<Mutex<Receiver<()>>>,
+        timeout: std::time::Duration,
+    ) -> Result<(), String> {
+        let receiver = done_rx
+            .lock()
+            .map_err(|_| "Embedded chat teardown receiver is unavailable.".to_string())?;
+        match receiver.recv_timeout(timeout) {
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Ok(()),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                Err("Embedded chat runtime did not confirm teardown in time.".to_string())
+            }
+        }
+    }
+
+    /// Synchronous updater teardown. The caller holds the runtime-update gate. Keep
+    /// the handle recorded while waiting so a timeout never drops exact ownership.
+    pub fn stop_bundled_for_update() -> Result<(), String> {
+        let (host, done_rx, result_rx) = {
+            let mut guard = embed()
+                .lock()
+                .map_err(|_| "embed lock poisoned".to_string())?;
+            let Some(handle) = guard.as_mut() else {
+                return Ok(());
+            };
+            if !super::updater_selects_provenance(handle.provenance) {
+                return Ok(());
+            }
+            if handle.shutting_down {
+                // A prior attempt may have timed out while exact teardown continued.
+                // Join that same teardown rather than issuing a second shutdown.
+                (handle.host, handle.done_rx.clone(), None)
+            } else {
+                let (result_tx, result_rx) = std::sync::mpsc::channel();
+                handle.shutting_down = true;
+                if handle.tx.send(Cmd::ShutdownForUpdate(result_tx)).is_err() {
+                    handle.shutting_down = false;
+                    return Err("The embedded chat runtime host is unavailable.".to_string());
+                }
+                (
+                    handle.host,
+                    handle.done_rx.clone(),
+                    Some(result_rx),
+                )
+            }
+        };
+
+        if let Some(result_rx) = result_rx {
+            wake(host);
+            // Updating cannot proceed on uncertainty, so unlike application exit
+            // this wait is deliberately unbounded: the owning thread must report an
+            // exact kill/reap result before bundled files can be touched.
+            let teardown_result = result_rx.recv().unwrap_or_else(|_| {
+                Err("Embedded chat runtime teardown ended without a result.".to_string())
+            });
+            if let Err(error) = teardown_result {
+                if let Ok(mut guard) = embed().lock() {
+                    if let Some(handle) = guard
+                        .as_mut()
+                        .filter(|handle| handle.host == host && handle.shutting_down)
+                    {
+                        handle.shutting_down = false;
+                    }
+                }
+                return Err(error);
+            }
+        }
+        wait_for_teardown(&done_rx, std::time::Duration::MAX)?;
+
+        let mut guard = embed()
+            .lock()
+            .map_err(|_| "embed lock poisoned after teardown".to_string())?;
+        if guard
+            .as_ref()
+            .is_some_and(|handle| handle.host == host && handle.shutting_down)
+        {
+            guard.take();
+        }
+        Ok(())
+    }
+
+    /// Synchronous teardown for application exit. It removes the handle before
+    /// waiting so no registry lock is held across child kill/reap. A timeout remains
+    /// best-effort here because the process-wide Job Object is the exit backstop.
     pub fn stop_blocking() {
-        // Take the handle out under the lock, then release the lock before we block
-        // on `done_rx`, so nothing else can deadlock behind a shutdown that's
-        // waiting on the message-loop thread.
         let handle = match embed().lock() {
             Ok(mut guard) => guard.take(),
             Err(_) => {
@@ -1750,29 +1933,18 @@ mod imp {
             }
         };
         let Some(handle) = handle else {
-            return; // Never started, or already torn down.
+            return;
         };
-        // If the send fails the thread is already gone (window destroyed), so
-        // teardown has effectively completed; don't wait on a dead channel.
         if handle.tx.send(Cmd::Shutdown).is_err() {
             return;
         }
         wake(handle.host);
-        match handle
-            .done_rx
-            .recv_timeout(std::time::Duration::from_secs(3))
+        if let Err(error) =
+            wait_for_teardown(&handle.done_rx, std::time::Duration::from_secs(3))
         {
-            Ok(()) => {}
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                // Thread dropped its sender without signalling — it has exited, so
-                // the window/process are gone. Nothing left to wait for.
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                log::warn!(
-                    "[Moltorino] embedded host didn't confirm teardown within 3s; \
-                     relying on the Job Object to reap it at process exit"
-                );
-            }
+            log::warn!(
+                "[Moltorino] {error} Relying on the Job Object to reap it at process exit"
+            );
         }
     }
 }
@@ -1909,6 +2081,17 @@ pub fn moltorino_embed_stop_sync() {
 #[cfg(not(windows))]
 pub fn moltorino_embed_stop_sync() {}
 
+/// Updater-only selective teardown. The caller must hold the runtime-update gate.
+#[cfg(windows)]
+pub(crate) fn stop_owned_bundled_embed_for_update() -> Result<(), String> {
+    imp::stop_bundled_for_update()
+}
+
+#[cfg(not(windows))]
+pub(crate) fn stop_owned_bundled_embed_for_update() -> Result<(), String> {
+    Ok(())
+}
+
 // Non-Windows stubs: the integration is Win32-only, so these keep the command
 // surface identical while making the feature inert off-Windows.
 #[cfg(not(windows))]
@@ -1990,7 +2173,24 @@ mod tests {
     use super::{
         build_set_channel_json, clip_hole_to_webview, host_client_size, is_current_child,
         parse_created_window, should_refit_child, translate_client_point,
+        updater_selects_provenance,
     };
+
+    #[test]
+    fn updater_selects_only_embedded_bundled_provenance() {
+        use crate::commands::moltorino::ChatRuntimeProvenance;
+
+        assert!(updater_selects_provenance(
+            ChatRuntimeProvenance::BundledBluzyrino
+        ));
+        for provenance in [
+            ChatRuntimeProvenance::CustomBluzyrino,
+            ChatRuntimeProvenance::CustomRuntime,
+            ChatRuntimeProvenance::LegacyBundledMoltorino,
+        ] {
+            assert!(!updater_selects_provenance(provenance));
+        }
+    }
 
     /// The real shape Moltorino emits: pretty-printed, string window-id, one
     /// trailing NUL byte.

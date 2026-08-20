@@ -287,6 +287,9 @@ struct Owned<C: TrackedChild> {
     /// The Twitch channel it was launched for (normalized via [`normalize_channel`]),
     /// used only to deduplicate repeat launches for the same channel.
     channel: String,
+    /// Captured from the resolved runtime at spawn time. Update-time selection must
+    /// never infer ownership from an image name, PID, or settings that may change.
+    provenance: ChatRuntimeProvenance,
     child: C,
     /// When we spawned it. Used purely to grant a short startup grace period before
     /// a windowless process is classified as stale/headless (a freshly-launched Qt
@@ -401,6 +404,30 @@ fn drain_and_terminate<C: TrackedChild>(entries: &mut Vec<Owned<C>>) {
     });
 }
 
+/// Reap exited ownership records, then stop only exact children launched from the
+/// bundled Bluzyrino tree. Any uncertain cleanup retains ownership and fails the
+/// update before filesystem mutation.
+#[cfg(windows)]
+fn stop_owned_bundled<C: TrackedChild>(entries: &mut Vec<Owned<C>>) -> Result<(), String> {
+    entries.retain_mut(|owned| !owned.child.reap_if_exited());
+    let mut failure = None;
+    entries.retain_mut(|owned| {
+        if !owned.provenance.is_bundled_bluzyrino() {
+            return true;
+        }
+        match owned.child.terminate_and_reap() {
+            Ok(()) => false,
+            Err(error) => {
+                if failure.is_none() {
+                    failure = Some(error);
+                }
+                true
+            }
+        }
+    });
+    failure.map_or(Ok(()), Err)
+}
+
 /// Registry of standalone Moltorino processes this instance owns. Guarded by a
 /// plain `Mutex`; every access reaps already-exited entries so the list never
 /// grows without bound and a dead handle is never selected for a kill.
@@ -432,6 +459,22 @@ pub fn shutdown_all_standalone() {
 
 #[cfg(not(windows))]
 pub fn shutdown_all_standalone() {}
+
+/// Updater-only selective shutdown. The caller must already hold the shared
+/// runtime-update gate, preserving the global gate → registry lock order.
+#[cfg(windows)]
+pub(crate) fn stop_owned_bundled_standalone_for_update() -> Result<(), String> {
+    let mut guard = owned_standalone()
+        .lock()
+        .map_err(|_| "Couldn't access the chat runtime process registry.".to_string())?;
+    stop_owned_bundled(&mut guard)
+        .map_err(|error| format!("Couldn't stop an owned bundled chat runtime: {error}"))
+}
+
+#[cfg(not(windows))]
+pub(crate) fn stop_owned_bundled_standalone_for_update() -> Result<(), String> {
+    Ok(())
+}
 
 /// Result of checking a user-supplied chat-runtime executable path, surfaced in
 /// the Integrations settings card.
@@ -529,6 +572,25 @@ pub(crate) enum ChatRuntimeKind {
     LegacyBundledMoltorino,
 }
 
+/// Immutable launch-time provenance for a StreamNook-owned chat child.
+///
+/// This is intentionally more specific than [`ChatRuntimeKind`] for custom
+/// Bluzyrino. The updater may stop only `BundledBluzyrino`; every other variant
+/// is outside its mutation lifecycle even when the executable has the same name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChatRuntimeProvenance {
+    BundledBluzyrino,
+    CustomBluzyrino,
+    CustomRuntime,
+    LegacyBundledMoltorino,
+}
+
+impl ChatRuntimeProvenance {
+    pub(crate) fn is_bundled_bluzyrino(self) -> bool {
+        self == Self::BundledBluzyrino
+    }
+}
+
 /// Presentation identity for a resolved runtime. This never affects launch
 /// arguments or process handling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -582,6 +644,19 @@ impl ResolvedChatRuntime {
             (ChatRuntimeKind::Custom, ChatRuntimeIdentity::Bluzyrino) => "custom_bluzyrino",
             (ChatRuntimeKind::Custom, ChatRuntimeIdentity::Moltorino) => "custom_moltorino",
             (ChatRuntimeKind::Custom, ChatRuntimeIdentity::Generic) => "custom",
+        }
+    }
+
+    pub(crate) fn provenance(&self) -> ChatRuntimeProvenance {
+        match (self.kind, self.identity()) {
+            (ChatRuntimeKind::BundledBluzyrino, _) => ChatRuntimeProvenance::BundledBluzyrino,
+            (ChatRuntimeKind::LegacyBundledMoltorino, _) => {
+                ChatRuntimeProvenance::LegacyBundledMoltorino
+            }
+            (ChatRuntimeKind::Custom, ChatRuntimeIdentity::Bluzyrino) => {
+                ChatRuntimeProvenance::CustomBluzyrino
+            }
+            (ChatRuntimeKind::Custom, _) => ChatRuntimeProvenance::CustomRuntime,
         }
     }
 }
@@ -688,6 +763,37 @@ pub(crate) fn resolve_chat_runtime(configured: &str) -> Result<ResolvedChatRunti
         .and_then(|p| p.parent().map(Path::to_path_buf))
         .ok_or_else(|| "Couldn't locate the StreamNook program folder.".to_string())?;
     resolve_runtime_in(configured, &exe_dir)
+}
+
+/// Resolve and establish one runtime launch without racing a bundled swap.
+///
+/// Custom and legacy launches avoid the gate. A bundled resolution takes it and
+/// resolves again while guarded, closing the gap between path selection and child
+/// ownership registration. The closure must follow the global lock order: runtime
+/// gate first, then its standalone/embed registry lock.
+fn establish_resolved_chat_runtime<T>(
+    resolve_while_gated: impl FnOnce() -> Result<ResolvedChatRuntime, String>,
+    gate: &std::sync::Mutex<()>,
+    establish: impl FnOnce(ResolvedChatRuntime) -> Result<T, String>,
+) -> Result<T, String> {
+    // Always gate the complete resolve → registry inspect → spawn/register path.
+    // A custom request can still reuse a bundled child for the same channel, so
+    // deciding from a pre-gate resolution would leave that registry access racy.
+    let _guard = gate
+        .lock()
+        .map_err(|_| "Chat runtime update lock is unavailable.".to_string())?;
+    establish(resolve_while_gated()?)
+}
+
+pub(crate) fn establish_chat_runtime<T>(
+    configured: &str,
+    establish: impl FnOnce(ResolvedChatRuntime) -> Result<T, String>,
+) -> Result<T, String> {
+    establish_resolved_chat_runtime(
+        || resolve_chat_runtime(configured),
+        super::chat_runtime_update::runtime_update_gate(),
+        establish,
+    )
 }
 
 /// Internal compatibility alias used by the unchanged embed implementation.
@@ -842,8 +948,7 @@ fn launch_runtime_with_configured(
     if !is_valid_twitch_login(&channel) {
         return Err(format!("\"{}\" isn't a valid Twitch channel name.", channel));
     }
-    let runtime = resolve_chat_runtime(&raw)?;
-    spawn_moltorino(&runtime.executable_path, &channel)
+    establish_chat_runtime(&raw, |runtime| spawn_moltorino(runtime, &channel))
 }
 
 /// Launch a compatible runtime with `-c t:<channel>` using the shared owned-child
@@ -868,7 +973,10 @@ pub async fn launch_moltorino(
 }
 
 #[cfg(windows)]
-fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
+fn spawn_moltorino(
+    runtime: ResolvedChatRuntime,
+    channel: &str,
+) -> Result<LaunchOutcome, String> {
     use std::os::windows::io::AsRawHandle;
     use std::os::windows::process::CommandExt;
 
@@ -906,15 +1014,17 @@ fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
         }
     };
 
+    let provenance = runtime.provenance();
+    let exe = runtime.executable_path;
     // Argument vector, never a shell string — nothing here is parsed by cmd.exe.
-    let child = std::process::Command::new(exe)
+    let child = std::process::Command::new(&exe)
         .arg("-c")
         .arg(format!("t:{channel}"))
         // CREATE_NO_WINDOW: no stray console flashes behind the GUI. Matches the
         // plugin host's spawn flags.
         .creation_flags(0x0800_0000)
         .spawn()
-        .map_err(|e| format!("Couldn't start Moltorino at {}: {}", display_path(exe), e))?;
+        .map_err(|e| format!("Couldn't start Moltorino at {}: {}", display_path(&exe), e))?;
 
     // Assign to the crash-safe job before recording: if StreamNook dies before a
     // clean shutdown, the OS still kills this child. Best-effort — the explicit
@@ -923,6 +1033,7 @@ fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
 
     guard.push(Owned {
         channel: channel.to_string(),
+        provenance,
         child,
         launched_at: std::time::Instant::now(),
     });
@@ -934,16 +1045,20 @@ fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
 }
 
 #[cfg(not(windows))]
-fn spawn_moltorino(_exe: &Path, _channel: &str) -> Result<LaunchOutcome, String> {
+fn spawn_moltorino(
+    _runtime: ResolvedChatRuntime,
+    _channel: &str,
+) -> Result<LaunchOutcome, String> {
     Err("The Moltorino integration is only available on Windows.".to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        bundled_bluzyrino_path, display_path, identity_from_path, is_valid_twitch_login,
-        legacy_bundled_moltorino_path, resolve_executable, resolve_runtime_in,
-        runtime_status_for, ChatRuntimeIdentity, ChatRuntimeKind,
+        bundled_bluzyrino_path, display_path, establish_resolved_chat_runtime,
+        identity_from_path, is_valid_twitch_login, legacy_bundled_moltorino_path,
+        resolve_executable, resolve_runtime_in, runtime_status_for, ChatRuntimeIdentity,
+        ChatRuntimeKind, ChatRuntimeProvenance, ResolvedChatRuntime,
     };
     use sha2::{Digest, Sha256};
     use std::path::Path;
@@ -1294,6 +1409,72 @@ mod tests {
         assert_eq!(ChatRuntimeIdentity::Generic.display_name(), "Chat runtime");
     }
 
+    #[test]
+    fn launch_provenance_distinguishes_bundled_custom_and_legacy_sources() {
+        let cases = [
+            (
+                ChatRuntimeKind::BundledBluzyrino,
+                "Bluzyrino.exe",
+                ChatRuntimeProvenance::BundledBluzyrino,
+            ),
+            (
+                ChatRuntimeKind::Custom,
+                "Bluzyrino.exe",
+                ChatRuntimeProvenance::CustomBluzyrino,
+            ),
+            (
+                ChatRuntimeKind::Custom,
+                "CompatibleChat.exe",
+                ChatRuntimeProvenance::CustomRuntime,
+            ),
+            (
+                ChatRuntimeKind::LegacyBundledMoltorino,
+                "Moltorino7.exe",
+                ChatRuntimeProvenance::LegacyBundledMoltorino,
+            ),
+        ];
+
+        for (kind, file_name, expected) in cases {
+            let runtime = ResolvedChatRuntime {
+                kind,
+                executable_path: Path::new(file_name).to_path_buf(),
+            };
+            assert_eq!(runtime.provenance(), expected);
+        }
+    }
+
+    #[test]
+    fn every_launch_resolves_and_establishes_while_holding_gate() {
+        for kind in [
+            ChatRuntimeKind::BundledBluzyrino,
+            ChatRuntimeKind::Custom,
+            ChatRuntimeKind::LegacyBundledMoltorino,
+        ] {
+            let gate = std::sync::Mutex::new(());
+            let observed = establish_resolved_chat_runtime(
+                || {
+                    assert!(gate.try_lock().is_err(), "resolve must run under update gate");
+                    Ok(ResolvedChatRuntime {
+                        kind,
+                        executable_path: Path::new("guarded/runtime.exe").to_path_buf(),
+                    })
+                },
+                &gate,
+                |runtime| {
+                    assert!(
+                        gate.try_lock().is_err(),
+                        "registry inspect and spawn must run under update gate"
+                    );
+                    Ok(runtime.executable_path)
+                },
+            )
+            .unwrap();
+
+            assert_eq!(observed, Path::new("guarded/runtime.exe"));
+            assert!(gate.try_lock().is_ok());
+        }
+    }
+
     // --- Standalone process-ownership registry -------------------------------
     //
     // These exercise the reap / same-channel decision / drain logic against a fake
@@ -1310,7 +1491,8 @@ mod tests {
     #[cfg(windows)]
     mod registry {
         use super::super::{
-            drain_and_terminate, plan_same_channel, LaunchPlan, Owned, TrackedChild,
+            drain_and_terminate, plan_same_channel, stop_owned_bundled, ChatRuntimeProvenance,
+            LaunchPlan, Owned, TrackedChild,
         };
         use std::cell::Cell;
         use std::rc::Rc;
@@ -1394,8 +1576,17 @@ mod tests {
         /// Build an entry. `grace` decides whether the injected grace closure will
         /// report it as still-starting (only consulted for the windowless case).
         fn owned(channel: &str, child: FakeChild) -> Owned<FakeChild> {
+            owned_with_provenance(channel, ChatRuntimeProvenance::BundledBluzyrino, child)
+        }
+
+        fn owned_with_provenance(
+            channel: &str,
+            provenance: ChatRuntimeProvenance,
+            child: FakeChild,
+        ) -> Owned<FakeChild> {
             Owned {
                 channel: channel.to_string(),
+                provenance,
                 child,
                 // Real time is irrelevant: every test injects its own grace closure.
                 launched_at: std::time::Instant::now(),
@@ -1605,6 +1796,59 @@ mod tests {
             );
             assert!(entries.is_empty());
             assert_eq!(kills.get(), 0, "natural exit must not be killed");
+        }
+
+        #[test]
+        fn updater_stops_only_owned_bundled_children() {
+            let (bundled, (bundled_kills, _)) = FakeChild::live_with_window();
+            let (custom_bluzyrino, (custom_bluzyrino_kills, _)) =
+                FakeChild::live_with_window();
+            let (custom, (custom_kills, _)) = FakeChild::live_headless();
+            let (legacy, (legacy_kills, _)) = FakeChild::live_with_window();
+            let mut entries = vec![
+                owned_with_provenance(
+                    "bundled",
+                    ChatRuntimeProvenance::BundledBluzyrino,
+                    bundled,
+                ),
+                owned_with_provenance(
+                    "custom-bluzyrino",
+                    ChatRuntimeProvenance::CustomBluzyrino,
+                    custom_bluzyrino,
+                ),
+                owned_with_provenance(
+                    "custom",
+                    ChatRuntimeProvenance::CustomRuntime,
+                    custom,
+                ),
+                owned_with_provenance(
+                    "legacy",
+                    ChatRuntimeProvenance::LegacyBundledMoltorino,
+                    legacy,
+                ),
+            ];
+
+            stop_owned_bundled(&mut entries).unwrap();
+
+            assert_eq!(bundled_kills.get(), 1);
+            assert_eq!(custom_bluzyrino_kills.get(), 0);
+            assert_eq!(custom_kills.get(), 0);
+            assert_eq!(legacy_kills.get(), 0);
+            assert_eq!(entries.len(), 3);
+            assert!(entries
+                .iter()
+                .all(|entry| !entry.provenance.is_bundled_bluzyrino()));
+        }
+
+        #[test]
+        fn updater_retains_bundled_ownership_when_stop_fails() {
+            let (mut bundled, (kills, _)) = FakeChild::live_headless();
+            bundled.cleanup_error = Some("wait failed");
+            let mut entries = vec![owned("bundled", bundled)];
+
+            assert_eq!(stop_owned_bundled(&mut entries).unwrap_err(), "wait failed");
+            assert_eq!(entries.len(), 1);
+            assert_eq!(kills.get(), 0);
         }
 
         /// Shutdown still drains every entry and terminates each live one exactly
