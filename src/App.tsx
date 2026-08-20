@@ -1803,7 +1803,15 @@ function App() {
                       by a StreamNook MultiChat popout. When it is, the popout
                       becomes the sole chat surface and we collapse the in-app
                       chat panel entirely (no duplicate chat across windows). */}
-                  {chatPlacement !== 'hidden' && (currentMediaType === 'live' || currentMediaType === 'offline_chat' || isMultiNookActive) && !activeChatChannelInPopout && (
+                  {/* 'video' and 'clip' carry chat REPLAY, so they get the panel too. They
+                      were missing here while the resize gate directly above already listed
+                      'video', which is why a VOD opened from the Watch VOD button (media
+                      type 'offline_chat') showed chat but the exact same VOD opened from a
+                      profile's Videos tab (media type 'video') did not. Both replay types
+                      are guarded on user_login, which playMedia only sets when there is a
+                      channel to replay — so a clip with no surviving source VOD still gets
+                      no empty panel. */}
+                  {chatPlacement !== 'hidden' && (currentMediaType === 'live' || currentMediaType === 'offline_chat' || ((currentMediaType === 'video' || currentMediaType === 'clip') && !!currentStream?.user_login) || isMultiNookActive) && !activeChatChannelInPopout && (
                     autoHideActive ? (
                       // Reveal-on-hover (side docks only): a thin edge handle is
                       // always visible; hovering the wrapper slides the chat out

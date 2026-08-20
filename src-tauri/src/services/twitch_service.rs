@@ -3337,7 +3337,7 @@ impl TwitchService {
                                 video {{ id }}
                                 game {{ id name }}
                                 curator {{ id displayName }}
-                                broadcaster {{ id displayName }}
+                                broadcaster {{ id displayName login }}
                             }}
                         }}
                         pageInfo {{ hasNextPage }}
@@ -3399,6 +3399,12 @@ impl TwitchService {
                 embed_url: str_at(node, &["embedURL"]),
                 broadcaster_id: str_at(node, &["broadcaster", "id"]),
                 broadcaster_name: str_at(node, &["broadcaster", "displayName"]),
+                broadcaster_login: node
+                    .get("broadcaster")
+                    .and_then(|b| b.get("login"))
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_lowercase()),
                 creator_id: str_at(node, &["curator", "id"]),
                 creator_name: str_at(node, &["curator", "displayName"]),
                 video_id: str_at(node, &["video", "id"]),
