@@ -1,17 +1,17 @@
-// Embedded Moltorino chat host (Phase 2).
+// Embedded chat-runtime host (Phase 2).
 //
 // Renders a React *placeholder* that reserves the chat area, then asks the Rust
 // backend to position a StreamNook-owned Win32 host window over that exact
-// rectangle. Moltorino reparents its chat split into that host window, so the
+// rectangle. The chat runtime reparents its split into that host window, so the
 // external client appears to live inside StreamNook's chat panel.
 //
 // This component owns only the *frontend* side of the lifecycle:
 //   • report the placeholder's bounds (DPI-aware) and visibility to Rust,
 //   • keep the followed channel in sync (debounced + deduped upstream),
-//   • surface embedding failures / unexpected Moltorino exit as a fallback so the
+//   • surface embedding failures / unexpected runtime exit as a fallback so the
 //     parent (ChatSurface) can swap in the native chat panel.
 //
-// It never kills the shared Moltorino process on its own unmount — the process
+// It never kills the shared chat-runtime process on its own unmount — the process
 // is launched once and reused (see the Rust `moltorino_embed` module). On unmount
 // it merely hides the host window so returning to an embeddable channel is
 // instant. The process is torn down only when the feature is turned off
@@ -26,7 +26,7 @@ import {
   subscribePlayerFullscreen,
 } from '../../utils/windowFullscreen';
 
-/// Event Rust emits when the embedded surface can't continue (Moltorino exited,
+/// Event Rust emits when the embedded surface can't continue (the runtime exited,
 /// or a create/attach failure) and the UI must fall back to native chat.
 const FALLBACK_EVENT = 'chat-runtime-embed-fallback';
 
@@ -113,7 +113,7 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
         width: b.w,
         height: b.h,
         visible,
-      }).catch((e) => Logger.error('[Moltorino] set_bounds failed:', e));
+      }).catch((e) => Logger.error('[ChatRuntime] set_bounds failed:', e));
     };
 
     const hideHost = () => {
@@ -147,7 +147,7 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
         height: initial.h,
         visible: initial.visible && !suppressed,
       }).catch((e) => {
-        Logger.error('[Moltorino] embed start failed:', e);
+        Logger.error('[ChatRuntime] embed start failed:', e);
         if (!disposed) onFallback(String(e));
       });
     } else {
@@ -211,7 +211,7 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
       return;
     }
     invoke('chat_runtime_embed_set_channel', { channel }).catch((e) =>
-      Logger.error('[Moltorino] set_channel failed:', e)
+      Logger.error('[ChatRuntime] set_channel failed:', e)
     );
   }, [channel]);
 
@@ -220,7 +220,7 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
     let unlisten: (() => void) | null = null;
     let active = true;
     listen<string>(FALLBACK_EVENT, (event) => {
-      Logger.warn('[Moltorino] embed fallback event:', event.payload);
+      Logger.warn('[ChatRuntime] embed fallback event:', event.payload);
       onFallback(event.payload || 'embed-fallback');
     })
       .then((fn) => {
@@ -236,13 +236,13 @@ const MoltorinoChatHost = ({ channel, onFallback }: MoltorinoChatHostProps) => {
 
   // The placeholder simply reserves the chat rectangle. The actual chat pixels
   // are the native Win32 window overlaid by Rust; we render a themed backdrop so
-  // there's never a flash of nothing before Moltorino paints / on a slow attach.
+  // there's never a flash of nothing before the runtime paints / on a slow attach.
   return (
     <div
       ref={placeholderRef}
       data-moltorino-embed-host="true"
       className="h-full w-full bg-secondary"
-      aria-label="Embedded Moltorino chat"
+      aria-label="Embedded Bluzyrino chat"
     />
   );
 };

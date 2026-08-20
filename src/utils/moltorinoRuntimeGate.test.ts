@@ -1,6 +1,6 @@
 // Run with: node --test src/utils/moltorinoRuntimeGate.test.ts
 //
-// Covers the pure availability gates for the Moltorino integration. Availability
+// Covers the pure availability gates for the chat-runtime integration. Availability
 // is the backend resolver's `available` result (the source of truth) — NOT any
 // executable-path string. These tests therefore never construct or mock a path;
 // they feed the resolved boolean|null status directly, exactly as the components
@@ -53,7 +53,7 @@ test('returning surface visibility to true permits embedding again', () => {
   assert.equal(isChatRuntimeEmbedCandidate(true, true, true), true);
 });
 
-// --- Open-in-Moltorino button ---
+// --- Open-in-chat-runtime button ---
 //
 // The launch button is independent of surface visibility (it lives in the chat
 // toolbar and just spawns/attaches the external client), so its gate keeps the

@@ -1,7 +1,7 @@
 //! Centralized build-identity helpers.
 //!
 //! Every difference between a normal production build and the local-only
-//! `beta-build` packaging mode (the bundled-Moltorino beta) is expressed here,
+//! `beta-build` packaging mode (the bundled-Bluzyrino beta) is expressed here,
 //! gated by the `beta-build` Cargo feature. Nothing else in the codebase should
 //! branch on that feature directly — call these helpers instead, so the two
 //! builds can never silently drift apart.
@@ -51,7 +51,7 @@ pub const fn storage_dir() -> &'static str {
 /// Human-facing product name (window title, tray tooltip, dialogs).
 #[cfg(feature = "beta-build")]
 pub const fn display_name() -> &'static str {
-    "StreamNook Moltorino Beta"
+    "StreamNook Bluzyrino"
 }
 
 /// Human-facing product name (window title, tray tooltip, dialogs).
@@ -173,7 +173,7 @@ mod tests {
     #[test]
     fn display_name_matches_mode() {
         if is_beta_build() {
-            assert_eq!(display_name(), "StreamNook Moltorino Beta");
+            assert_eq!(display_name(), "StreamNook Bluzyrino");
         } else {
             assert_eq!(display_name(), "StreamNook");
         }

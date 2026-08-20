@@ -56,7 +56,7 @@ const Toggle = ({ enabled, onChange }: { enabled: boolean; onChange: () => void 
 const IntegrationsSettings = () => {
   const { settings, updateSettings } = useAppStore();
 
-  // === Moltorino (optional external chat client) ===
+  // === Compatible chat runtime (legacy settings key retained) ===
   const moltorino = settings.moltorino ?? {};
   const storedPath = moltorino.executable_path ?? '';
   // Controlled input, kept separate from the persisted value so typing never
@@ -74,7 +74,7 @@ const IntegrationsSettings = () => {
     updateSettings({ ...settings, moltorino: { ...moltorino, ...patch } });
 
   // Ask the backend which runtime it would launch. Read-only (never spawns
-  // Moltorino); safe to call on mount and after the saved path changes.
+  // the runtime); safe to call on mount and after the saved path changes.
   const refreshRuntime = useCallback(() => {
     let alive = true;
     invoke<ChatRuntimeStatus>('chat_runtime_status')
@@ -220,10 +220,9 @@ const IntegrationsSettings = () => {
           </div>
         </div>
 
-        {/* Moltorino — an external Twitch chat client the user installs and
-            maintains themselves. StreamNook doesn't bundle, embed, or link it;
-            it just launches the exe the user points at here. Native chat is
-            unaffected and stays the default everywhere. */}
+        {/* Bluzyrino is bundled for external or embedded Twitch chat. The legacy
+            settings key also accepts compatible custom runtimes; native chat is
+            unaffected and stays the universal fallback. */}
         <div id="settings-section-moltorino" className="glass-panel rounded-lg p-4">
           <div className="flex items-center gap-3.5">
             <div className="flex flex-shrink-0 items-center gap-1.5">
@@ -380,7 +379,7 @@ const IntegrationsSettings = () => {
               />
             </div>
 
-            {/* Phase 2: embed Moltorino inside the main chat area instead of
+            {/* Embed the compatible runtime inside the main chat area instead of
                 launching it in a separate window. Native chat stays the default
                 (and the universal fallback for VODs, non-Twitch, offline chat,
                 and any embedding failure). Windows-only; needs a working runtime. */}

@@ -745,10 +745,10 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
 
   const settings = useAppStore((s) => s.settings);
 
-  // Whether the backend resolver reports a launchable Moltorino runtime (bundled
+  // Whether the backend resolver reports a launchable chat runtime (bundled
   // or custom). This is the ONLY correct signal for offering the launch button:
   // an empty custom path does not mean "unavailable" because a bundled copy may
-  // exist, and only Rust knows. Read-only status query (never spawns Moltorino).
+  // exist, and only Rust knows. Read-only status query (never spawns the runtime).
   // Fetched once on mount and re-fetched whenever the saved custom path changes,
   // so clearing/setting the path flips availability without an app restart.
   const chatRuntimeStoredPath = settings.moltorino?.executable_path ?? '';
@@ -771,12 +771,12 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
     };
   }, [chatRuntimeStoredPath]);
 
-  // Moltorino: whether to offer "Open chat in Moltorino" beside Pop out chat.
+  // Chat runtime: whether to offer an external-chat action beside Pop out chat.
   // Deliberately narrow — this is the ONE normal, main, live Twitch chat panel:
   //   • opt-in setting on, and the backend resolver reports a launchable runtime
   //     (bundled or custom) — NOT merely a non-empty custom path, so the bundled
   //     runtime enables the button with the custom field left blank
-  //   • Twitch only (Moltorino speaks Twitch IRC; Kick/YouTube/TikTok can't work)
+  //   • Twitch only (the compatible runtime speaks Twitch IRC; other providers can't work)
   //   • !channelOverride excludes every MultiChat popout pane AND MultiNook's
   //     synthesized active slot, so it can never show in either
   //   • !isMultiNookActive is belt-and-braces for MultiNook with no active slot,

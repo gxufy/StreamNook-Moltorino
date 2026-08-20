@@ -96,9 +96,9 @@ export interface ChatLoggingSettings {
 // serialized object name are retained so existing Moltorino settings round-trip
 // unchanged. Machine-local, so it is excluded from portable settings backups.
 export interface MoltorinoSettings {
-  executable_path?: string; // Absolute path to the user's Moltorino .exe; unset = integration inert
-  show_chat_button?: boolean; // Show "Open chat in Moltorino" in the chat header (default: false)
-  embedded_chat?: boolean; // Phase 2: embed Moltorino in the main chat area instead of native chat (default: false)
+  executable_path?: string; // Absolute path to a compatible chat-runtime .exe; unset = use bundled runtime
+  show_chat_button?: boolean; // Show an "Open in chat runtime" action in the chat header (default: false)
+  embedded_chat?: boolean; // Embed the chat runtime in the main chat area instead of native chat (default: false)
 }
 
 export interface DropsSettings {
@@ -784,7 +784,7 @@ export interface Settings {
   collapse_gift_subs?: boolean; // Collapse mass gift-sub bombs into one announcement row with recipients (default on)
   clip_chat_replay?: boolean; // Show the chat that was live during a clip, beside it in the clip player (default on)
   chat_logging?: ChatLoggingSettings; // Save chat to plain text files as you watch
-  moltorino?: MoltorinoSettings; // Optional external Moltorino chat integration (opt-in, machine-local)
+  moltorino?: MoltorinoSettings; // Compatible chat-runtime integration; legacy key retained (opt-in, machine-local)
   moderation?: ModerationSettings;
   keybindings?: KeybindingOverrides; // Customizable keyboard shortcut overrides (id -> chords)
   // Which action buttons show in the video player's top-right overlay, by id:

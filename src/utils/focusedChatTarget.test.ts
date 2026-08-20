@@ -1,6 +1,6 @@
 // Run with: node --test src/utils/focusedChatTarget.test.ts
 //
-// Covers the pure decision logic behind the embedded Moltorino surface: Twitch
+// Covers the pure decision logic behind the embedded chat-runtime surface: Twitch
 // login normalization/validation, target resolution precedence, native-fallback
 // decisions, and the dedupe predicate.
 

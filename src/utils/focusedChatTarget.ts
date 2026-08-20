@@ -1,5 +1,5 @@
 // Centralized "focused chat target" abstraction — the single source of truth for
-// what the *embedded* Moltorino chat surface should follow, and when it must step
+// what the *embedded* chat-runtime surface should follow, and when it must step
 // aside for StreamNook's native chat.
 //
 // Everything here is pure (no React, no Tauri, no DOM) so the decision logic can
@@ -105,14 +105,14 @@ export function resolveFocusedChatTarget(input: FocusedChatInputs): FocusedChatT
 }
 
 /// Whether two targets are equivalent for embedding purposes. Used to dedupe
-/// rapid, redundant updates so we don't re-send an unchanged channel to
-/// Moltorino. Source is intentionally ignored: following forsen from the main
-/// player vs from MultiNook is the same channel to Moltorino.
+/// rapid, redundant updates so we don't re-send an unchanged channel to the
+/// runtime. Source is intentionally ignored: following forsen from the main
+/// player vs from MultiNook is the same channel to the runtime.
 export function sameEmbedTarget(a: FocusedChatTarget, b: FocusedChatTarget): boolean {
   return a.channelLogin === b.channelLogin;
 }
 
-/// Whether the embedded Moltorino surface should be shown at all for a target.
+/// Whether the embedded chat-runtime surface should be shown at all for a target.
 /// (Only when there's a concrete Twitch channel to follow.)
 export function isEmbeddable(target: FocusedChatTarget): boolean {
   return target.channelLogin !== null;

@@ -467,6 +467,11 @@ fn main() {
         .manage(eventsub_service_state)
         .setup(move |app| {
             let app_handle = app.handle().clone();
+            // The config-created window inherits the production title from the base
+            // config, so apply the build identity after Tauri creates it.
+            if let Some(main) = app.get_webview_window("main") {
+                main.set_title(crate::build_identity::display_name())?;
+            }
             // Runtime stall detector: measures backend freezes (tokio-blocked vs
             // whole-process) and records them to the capture file. Started here,
             // inside the tokio runtime Tauri set up.
@@ -696,7 +701,8 @@ fn main() {
             // window while StreamNook MultiChat popouts are still open. Left
             // click brings the main window forward; right click opens a menu
             // with Show / Open MultiChat / Quit.
-            let show_item = MenuItem::with_id(app, "show", "Show StreamNook", true, None::<&str>)?;
+            let show_label = format!("Show {}", crate::build_identity::display_name());
+            let show_item = MenuItem::with_id(app, "show", show_label, true, None::<&str>)?;
             let open_multichat_item = MenuItem::with_id(
                 app,
                 "open_multichat",
@@ -705,7 +711,8 @@ fn main() {
                 None::<&str>,
             )?;
             let sep = PredefinedMenuItem::separator(app)?;
-            let quit_item = MenuItem::with_id(app, "quit", "Quit StreamNook", true, None::<&str>)?;
+            let quit_label = format!("Quit {}", crate::build_identity::display_name());
+            let quit_item = MenuItem::with_id(app, "quit", quit_label, true, None::<&str>)?;
             let tray_menu = Menu::with_items(
                 app,
                 &[&show_item, &open_multichat_item, &sep, &quit_item],
@@ -1351,14 +1358,14 @@ fn main() {
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
-                // Tear down the embedded Moltorino host (kills only the process
+                // Tear down the embedded chat-runtime host (kills only the process
                 // and destroys only the window StreamNook created) so shutdown
-                // never leaves an orphaned Moltorino behind. Blocks until the
+                // never leaves an orphaned runtime behind. Blocks until the
                 // owning thread confirms the kill. No-op if never used.
                 commands::moltorino_embed::moltorino_embed_stop_sync();
-                // Terminate every standalone Moltorino this instance launched, by
-                // its exact retained handle (never by PID or image name), so an
-                // "Open chat in Moltorino" launch can't outlive StreamNook.
+                // Terminate every standalone chat runtime this instance launched,
+                // by its exact retained handle (never by PID or image name), so an
+                // external-chat launch can't outlive StreamNook.
                 commands::moltorino::shutdown_all_standalone();
                 // Ask running plugin processes to shut down before the app
                 // process dies, waiting briefly so well-behaved plugins exit
@@ -1378,7 +1385,7 @@ fn main() {
                 // paths above have already run. With KILL_ON_JOB_CLOSE this is a
                 // final safety net that can only ever terminate children we
                 // ourselves assigned to the job. No-op if the job was never
-                // created (no Moltorino was ever spawned).
+                // created (no chat runtime was ever spawned).
                 #[cfg(windows)]
                 commands::moltorino::jobobject::close();
             }

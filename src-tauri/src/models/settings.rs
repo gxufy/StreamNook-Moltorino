@@ -151,25 +151,25 @@ impl Default for StreamlinkSettings {
     }
 }
 
-/// Optional external Moltorino chat integration. StreamNook never bundles or
-/// links Moltorino; the user points this at their own install and StreamNook
-/// spawns it on demand. Machine-local (an absolute exe path), so this group is
-/// excluded from portable settings backups — see NON_PORTABLE_KEYS.
+/// Compatible external/embedded chat-runtime settings. The legacy serialized
+/// object name is retained so existing beta settings round-trip unchanged. The
+/// optional absolute executable path is machine-local, so this group is excluded
+/// from portable settings backups — see NON_PORTABLE_KEYS.
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct MoltorinoSettings {
-    /// Absolute path to the user's Moltorino executable. None/empty = not set up,
-    /// which keeps the whole integration inert.
+    /// Absolute path to a compatible chat-runtime executable. None/empty uses the
+    /// bundled runtime when present.
     #[serde(default)]
     pub executable_path: Option<String>,
-    /// Whether the "Open chat in Moltorino" action shows in the chat header.
+    /// Whether the "Open in chat runtime" action shows in the chat header.
     /// Defaults to false: the integration is opt-in and StreamNook's native chat
     /// stays the default with no new UI until the user asks for it.
     #[serde(default)]
     pub show_chat_button: bool,
-    /// Phase 2: use Moltorino *embedded* in the main chat area instead of the
-    /// native chat panel. Defaults to false so native chat stays the default and
-    /// old settings.json files (which lack this key) load unchanged. Inert unless
-    /// `executable_path` points at a working Moltorino.
+    /// Use the chat runtime *embedded* in the main chat area instead of the native
+    /// chat panel. Defaults to false so native chat stays the default and old
+    /// settings.json files (which lack this key) load unchanged. Requires a bundled
+    /// or configured compatible runtime.
     #[serde(default)]
     pub embedded_chat: bool,
 }
@@ -541,7 +541,7 @@ pub struct Settings {
     /// day), written by services::chat_logger_service.
     #[serde(default)]
     pub chat_logging: ChatLoggingSettings,
-    /// Optional external Moltorino chat integration (opt-in, machine-local).
+    /// Compatible chat-runtime integration (opt-in, machine-local).
     #[serde(default)]
     pub moltorino: MoltorinoSettings,
     /// What closing the main window does. Modelled here rather than left to

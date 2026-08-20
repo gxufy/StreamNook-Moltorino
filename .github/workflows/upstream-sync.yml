@@ -172,7 +172,7 @@ jobs:
           RUST_CHECK_RESULT: ${{ steps.rust-check.outcome }}
           RUST_TEST_RESULT: ${{ steps.rust-test.outcome }}
         run: |
-          $title = "Sync upstream StreamNook into Moltorino"
+          $title = "Sync upstream StreamNook into Bluzyrino"
           $body = @"
           ## Upstream sync
 

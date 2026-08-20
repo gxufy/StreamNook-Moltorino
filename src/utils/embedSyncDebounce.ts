@@ -1,5 +1,5 @@
 // A small, framework-agnostic debouncer purpose-built for syncing the embedded
-// Moltorino surface to the focused chat target. It coalesces rapid updates,
+// chat-runtime surface to the focused chat target. It coalesces rapid updates,
 // deduplicates against what was last committed, and cancels superseded (stale)
 // updates so that fast channel switching only ever sends the final destination.
 //

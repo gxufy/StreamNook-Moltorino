@@ -2,7 +2,7 @@
 //
 // This is the single wrapper that decides, for the *normal main chat area only*,
 // whether to render StreamNook's native chat (`ChatWidget`) or the embedded
-// Moltorino surface (`MoltorinoChatHost`). It is deliberately the ONLY place that
+// chat-runtime surface (`MoltorinoChatHost`). It is deliberately the ONLY place that
 // swaps the two, so every other ChatWidget placement (MultiChat popouts, provider
 // surfaces, the header pop-out) keeps rendering native chat untouched.
 //
@@ -13,11 +13,11 @@
 //     actually follow.
 //   • The followed channel is resolved from the same stores ChatWidget reads
 //     (main player + MultiNook), normalized, and debounced so rapid switching only
-//     sends Moltorino the final destination.
+//     sends the chat runtime the final destination.
 //   • Any unsupported context (VOD replay, non-Twitch, offline, no valid channel)
 //     falls back to native chat immediately — and because the host is unmounted in
 //     that case, a previous channel is never left on screen.
-//   • If the embed fails at runtime (spawn failure, unexpected Moltorino exit,
+//   • If the embed fails at runtime (spawn failure, unexpected runtime exit,
 //     attach failure) we latch native chat for the current channel until the
 //     target changes, so the user always has a working chat.
 
@@ -37,7 +37,7 @@ import { createDedupingDebouncer } from '../../utils/embedSyncDebounce';
 import { isChatRuntimeEmbedCandidate } from '../../utils/moltorinoRuntimeGate';
 import { Logger } from '../../utils/logger';
 
-/// Delay before a resolved channel change is pushed to Moltorino. Long enough to
+/// Delay before a resolved channel change is pushed to the runtime. Long enough to
 /// swallow the burst of intermediate targets during rapid switching, short enough
 /// to feel instant on a deliberate switch.
 const CHANNEL_DEBOUNCE_MS = 300;
@@ -87,7 +87,7 @@ const ChatSurface = () => {
   const executablePath = useAppStore((s) => s.settings?.moltorino?.executable_path ?? '');
   // The embedded chat is a native Win32 child window Rust overlays on the chat
   // rectangle; it composites ABOVE the WebView, so a DOM overlay like the Settings
-  // dialog (fixed inset-0) can never cover it — Moltorino would draw straight
+  // dialog (fixed inset-0) can never cover it — the runtime would draw straight
   // through Settings. We therefore treat "Settings open" as "primary surface not
   // visible" and drop the embed candidate, which unmounts the host and runs its
   // teardown (hide native window + restore the WebView region). Closing Settings
@@ -98,7 +98,7 @@ const ChatSurface = () => {
 
   // Whether the backend resolver would actually find a launchable runtime
   // (bundled or custom). This is the real availability signal — NOT whether the
-  // custom path field is filled in — because a bundled Moltorino ships with the
+  // custom path field is filled in — because bundled Bluzyrino ships with the
   // app and works with the custom field left blank.
   //
   //   • `null`  -> status not yet loaded; treat as "not a candidate" so we never
@@ -106,7 +106,7 @@ const ChatSurface = () => {
   //   • `true`  -> resolver found a runtime; embedding may proceed.
   //   • `false` -> no runtime; native chat, no host, no WebView cutout.
   //
-  // Read-only command (never spawns Moltorino). Fetched once on mount and
+  // Read-only command (never spawns the runtime). Fetched once on mount and
   // refreshed when the saved custom path changes, so an unavailable->available
   // transition (e.g. the user points at a valid exe, or clears an invalid one so
   // the bundle takes over) starts the embedded host without an app restart.
@@ -118,7 +118,7 @@ const ChatSurface = () => {
         if (alive) setRuntimeAvailable(status.available);
       })
       .catch((err) => {
-        Logger.warn('[Moltorino] runtime status check failed:', err);
+        Logger.warn('[ChatRuntime] runtime status check failed:', err);
         if (alive) setRuntimeAvailable(false);
       });
     return () => {
@@ -142,7 +142,7 @@ const ChatSurface = () => {
   // with the field blank. While status is still loading (`null`) this is false, so
   // native chat stays up and we never spin up the host or a WebView cutout
   // speculatively. `surfaceVisible` is false while Settings is open, so the native
-  // Moltorino window can't draw through the Settings overlay.
+  // chat-runtime window can't draw through the Settings overlay.
   const embedCandidate = isChatRuntimeEmbedCandidate(embeddedEnabled, runtimeAvailable, surfaceVisible);
 
   // One debouncer for the lifetime of the surface. It commits the resolved
@@ -189,7 +189,7 @@ const ChatSurface = () => {
     return () => d.cancel();
   }, []);
 
-  // Tear down the reused Moltorino process when the feature is turned OFF (or its
+  // Tear down the reused chat-runtime process when the feature is turned OFF (or its
   // path is cleared) — the one moment we own the process and should release it.
   //
   // This is deliberately keyed on a true->false transition of `embedCandidate`, NOT
@@ -203,7 +203,7 @@ const ChatSurface = () => {
   useEffect(() => {
     if (prevEmbedCandidate.current && !embedCandidate) {
       invoke('chat_runtime_embed_stop').catch((err) => {
-        Logger.warn('[Moltorino] embed stop failed:', err);
+        Logger.warn('[ChatRuntime] embed stop failed:', err);
       });
     }
     prevEmbedCandidate.current = embedCandidate;
@@ -211,7 +211,7 @@ const ChatSurface = () => {
 
   const handleFallback = useCallback(
     (reason: string) => {
-      Logger.warn('[Moltorino] falling back to native chat:', reason);
+      Logger.warn('[ChatRuntime] falling back to native chat:', reason);
       // Latch the channel that failed so we don't immediately re-mount the host
       // for the same broken target. A channel change clears this latch above.
       setFailedChannel(embedChannel);

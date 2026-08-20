@@ -1,4 +1,4 @@
-//! Optional *embedded* Moltorino chat surface (Phase 2).
+//! Optional embedded chat-runtime surface.
 //!
 //! Phase 1 (see [`super::moltorino`]) launches the user's Moltorino as a separate
 //! window, fire-and-forget. Phase 2 reuses the same user-supplied executable but
@@ -293,7 +293,7 @@ mod imp {
 
     /// Wake the message loop to drain the command queue.
     const WM_APP_WAKE: u32 = WM_APP + 1;
-    /// The Moltorino process exited on its own.
+    /// The chat-runtime process exited on its own.
     const WM_APP_EXITED: u32 = WM_APP + 2;
     /// The embedded child fired a location-change (Qt snapped it back to its own
     /// default size); coalesced request to re-fit it to the host on our thread.
@@ -466,7 +466,7 @@ mod imp {
             .arg(host_hwnd.to_string())
             .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
             .spawn()
-            .map_err(|e| format!("Couldn't start Moltorino at {}: {}", display_path(exe), e))
+            .map_err(|e| format!("Couldn't start the chat runtime at {}: {}", display_path(exe), e))
     }
 
     unsafe fn state_ptr(hwnd: HWND) -> *mut HostState {
@@ -516,7 +516,7 @@ mod imp {
         let mut host_rect = RECT::default();
         if GetClientRect(host, &mut host_rect).is_err() {
             log::warn!(
-                "[Moltorino] embed fit_child: GetClientRect(host={:#x}) failed: {:?}",
+                "[ChatRuntime] embed fit_child: GetClientRect(host={:#x}) failed: {:?}",
                 host.0 as isize,
                 GetLastError()
             );
@@ -539,7 +539,7 @@ mod imp {
             child_fit_flags(extra_flags),
         ) {
             log::warn!(
-                "[Moltorino] embed fit_child: SetWindowPos(child={:#x}) to ({w}x{h}) failed: {e:?}",
+                "[ChatRuntime] embed fit_child: SetWindowPos(child={:#x}) to ({w}x{h}) failed: {e:?}",
                 child.0 as isize,
             );
             return;
@@ -551,7 +551,7 @@ mod imp {
         let mut child_rect = RECT::default();
         if GetClientRect(child, &mut child_rect).is_err() {
             log::warn!(
-                "[Moltorino] embed fit_child: GetClientRect(child={:#x}) failed after resize: {:?}",
+                "[ChatRuntime] embed fit_child: GetClientRect(child={:#x}) failed after resize: {:?}",
                 child.0 as isize,
                 GetLastError()
             );
@@ -566,12 +566,12 @@ mod imp {
 
         if cw != w || ch != h {
             log::warn!(
-                "[Moltorino] embed fit_child: child={:#x} size ({cw}x{ch}) != host client ({w}x{h})",
+                "[ChatRuntime] embed fit_child: child={:#x} size ({cw}x{ch}) != host client ({w}x{h})",
                 child.0 as isize,
             );
         } else {
             log::debug!(
-                "[Moltorino] embed fit_child: child={:#x} filled host client ({w}x{h})",
+                "[ChatRuntime] embed fit_child: child={:#x} filled host client ({w}x{h})",
                 child.0 as isize,
             );
         }
@@ -666,7 +666,7 @@ mod imp {
         let tid = GetWindowThreadProcessId(child, Some(&mut pid as *mut u32));
         if tid == 0 || pid == 0 {
             log::warn!(
-                "[Moltorino] embed win-event: GetWindowThreadProcessId(child={:#x}) \
+                "[ChatRuntime] embed win-event: GetWindowThreadProcessId(child={:#x}) \
                  gave pid={pid} tid={tid}; not hooking",
                 child.0 as isize
             );
@@ -685,7 +685,7 @@ mod imp {
         );
         if hook.0.is_null() {
             log::warn!(
-                "[Moltorino] embed win-event: SetWinEventHook failed for child={:#x} \
+                "[ChatRuntime] embed win-event: SetWinEventHook failed for child={:#x} \
                  (pid={pid} tid={tid}): {:?}",
                 child.0 as isize,
                 GetLastError()
@@ -694,7 +694,7 @@ mod imp {
         }
         state.win_event_hook = Some(hook);
         log::debug!(
-            "[Moltorino] embed win-event hook installed: child={:#x} pid={pid} tid={tid}",
+            "[ChatRuntime] embed win-event hook installed: child={:#x} pid={pid} tid={tid}",
             child.0 as isize
         );
     }
@@ -707,7 +707,7 @@ mod imp {
         if let Some(hook) = state.win_event_hook.take() {
             let _ = UnhookWinEvent(hook);
             state.refit_pending = false;
-            log::debug!("[Moltorino] embed win-event hook removed (reason: {reason})");
+            log::debug!("[ChatRuntime] embed win-event hook removed (reason: {reason})");
         }
     }
 
@@ -728,7 +728,7 @@ mod imp {
     /// and the caller falls back to native chat.
     unsafe fn attach_child(state: &mut HostState, child: HWND) -> Result<(), String> {
         if !IsWindow(Some(child)).as_bool() {
-            return Err("Moltorino reported a window handle that is no longer valid.".to_string());
+            return Err("The chat runtime reported a window handle that is no longer valid.".to_string());
         }
 
         let old_parent = GetParent(child).unwrap_or_default();
@@ -783,7 +783,7 @@ mod imp {
         let _ = ShowWindow(child, if state.visible { SW_SHOW } else { SW_HIDE });
 
         log::debug!(
-            "[Moltorino] embed child reparented: child={:#x} old-parent={:#x} \
+            "[ChatRuntime] embed child reparented: child={:#x} old-parent={:#x} \
              set-parent-prev={:#x} final-parent={:#x} old-style={:#x} new-style={:#x} \
              visible={}",
             child.0 as isize,
@@ -923,7 +923,7 @@ mod imp {
             // Stored handle died (e.g. webview recreated); drop our stale region
             // bookkeeping and re-resolve below.
             log::debug!(
-                "[Moltorino] embed WRY_WEBVIEW handle {:#x} went invalid; re-resolving",
+                "[ChatRuntime] embed WRY_WEBVIEW handle {:#x} went invalid; re-resolving",
                 wv.0 as isize
             );
             state.webview = None;
@@ -933,7 +933,7 @@ mod imp {
         let resolved = resolve_webview(state.root);
         if let Some(wv) = resolved {
             log::debug!(
-                "[Moltorino] embed resolved WRY_WEBVIEW: root={:#x} webview={:#x}",
+                "[ChatRuntime] embed resolved WRY_WEBVIEW: root={:#x} webview={:#x}",
                 state.root.0 as isize,
                 wv.0 as isize
             );
@@ -973,7 +973,7 @@ mod imp {
         let _ = SetWindowRgn(wv, None, true);
         state.applied_hole = None;
         log::debug!(
-            "[Moltorino] embed WebView region restored (reason: {reason}) webview={:#x}",
+            "[ChatRuntime] embed WebView region restored (reason: {reason}) webview={:#x}",
             wv.0 as isize
         );
     }
@@ -1008,7 +1008,7 @@ mod imp {
             // WebView there is nothing we could have punched, so there is no blank
             // hole to leave behind.
             log::warn!(
-                "[Moltorino] embed could not resolve WRY_WEBVIEW under root={:#x}; \
+                "[ChatRuntime] embed could not resolve WRY_WEBVIEW under root={:#x}; \
                  skipping cutout ({reason})",
                 state.root.0 as isize
             );
@@ -1019,7 +1019,7 @@ mod imp {
         let mut wv_rect = RECT::default();
         if GetClientRect(wv, &mut wv_rect).is_err() {
             log::warn!(
-                "[Moltorino] embed GetClientRect(webview={:#x}) failed: {:?}",
+                "[ChatRuntime] embed GetClientRect(webview={:#x}) failed: {:?}",
                 wv.0 as isize,
                 GetLastError()
             );
@@ -1054,7 +1054,7 @@ mod imp {
         let hole = CreateRectRgn(left, top, right, bottom);
         if full.is_invalid() || hole.is_invalid() {
             log::warn!(
-                "[Moltorino] embed CreateRectRgn failed: {:?}",
+                "[ChatRuntime] embed CreateRectRgn failed: {:?}",
                 GetLastError()
             );
             if !full.is_invalid() {
@@ -1072,7 +1072,7 @@ mod imp {
         // `hole` has served its purpose either way.
         let _ = DeleteObject(HGDIOBJ(hole.0));
         if combined == RGN_ERROR {
-            log::warn!("[Moltorino] embed CombineRgn(RGN_DIFF) failed");
+            log::warn!("[ChatRuntime] embed CombineRgn(RGN_DIFF) failed");
             let _ = DeleteObject(HGDIOBJ(full.0));
             return;
         }
@@ -1082,7 +1082,7 @@ mod imp {
         let ok = SetWindowRgn(wv, Some(full), true) != 0;
         if !ok {
             log::warn!(
-                "[Moltorino] embed SetWindowRgn(webview={:#x}) failed: {:?}",
+                "[ChatRuntime] embed SetWindowRgn(webview={:#x}) failed: {:?}",
                 wv.0 as isize,
                 GetLastError()
             );
@@ -1092,7 +1092,7 @@ mod imp {
 
         state.applied_hole = Some((left, top, right, bottom));
         log::debug!(
-            "[Moltorino] embed WebView cutout applied ({reason}): webview={:#x} \
+            "[ChatRuntime] embed WebView cutout applied ({reason}): webview={:#x} \
              webview-size=({vw}x{vh}) hole=(l={left},t={top},r={right},b={bottom}) \
              hole-size=({}x{})",
             wv.0 as isize,
@@ -1115,7 +1115,7 @@ mod imp {
         if state.logged_offset != Some(offset) {
             state.logged_offset = Some(offset);
             log::debug!(
-                "[Moltorino] embed bounds: webview=({x},{y}) offset={offset:?} \
+                "[ChatRuntime] embed bounds: webview=({x},{y}) offset={offset:?} \
                  root-client=({rx},{ry}) size=({w}x{h}) visible={visible}"
             );
         }
@@ -1241,7 +1241,7 @@ mod imp {
                                     // process, and tear the host down cleanly. Mirror
                                     // the WM_APP_EXITED teardown so the global clears
                                     // and a later start recreates fresh.
-                                    log::warn!("[Moltorino] embed attach failed: {reason}");
+                                    log::warn!("[ChatRuntime] embed attach failed: {reason}");
                                     state.shutting_down = true;
                                     // No hook was installed on this path (install
                                     // happens only on attach success), but remove is
@@ -1298,7 +1298,7 @@ mod imp {
                                     super::host_client_size((cr.left, cr.top, cr.right, cr.bottom));
                                 if super::should_refit_child(host_size, child_size) {
                                     log::debug!(
-                                        "[Moltorino] embed win-event refit: child={:#x} \
+                                        "[ChatRuntime] embed win-event refit: child={:#x} \
                                          ({}x{}) -> host client ({}x{})",
                                         child.0 as isize,
                                         child_size.0,
@@ -1414,7 +1414,7 @@ mod imp {
             };
 
             log::debug!(
-                "[Moltorino] embed HWNDs: source={:#x} root={:#x}",
+                "[ChatRuntime] embed HWNDs: source={:#x} root={:#x}",
                 source.0 as isize,
                 root.0 as isize
             );
@@ -1477,7 +1477,7 @@ mod imp {
             // handle and initial placement now that we have it.
             (*state_raw).host = hwnd;
             log::debug!(
-                "[Moltorino] embed host created: host={:#x} webview=({x},{y}) \
+                "[ChatRuntime] embed host created: host={:#x} webview=({x},{y}) \
                  offset={offset:?} root-client=({rx},{ry}) size=({w}x{h})",
                 hwnd.0 as isize
             );
@@ -1594,7 +1594,7 @@ mod imp {
         // keeps a bad path from ever creating a host window.
         let runtime = resolve_moltorino_runtime(exe_path)?;
         log::debug!(
-            "[Moltorino] embed runtime resolved: source={} path={}",
+            "[ChatRuntime] embed runtime resolved: source={} path={}",
             runtime.source_status(),
             display_path(&runtime.executable_path)
         );
@@ -1663,7 +1663,7 @@ mod imp {
                     let _ = cmd_tx.send(Cmd::Shutdown);
                     wake(published);
                 }
-                Err("Timed out starting the embedded Moltorino host.".to_string())
+                Err("Timed out starting the embedded chat-runtime host.".to_string())
             }
         }
     }
@@ -1745,7 +1745,7 @@ mod imp {
         let handle = match embed().lock() {
             Ok(mut guard) => guard.take(),
             Err(_) => {
-                log::warn!("[Moltorino] embed lock poisoned during exit; skipping embed teardown");
+                log::warn!("[ChatRuntime] embed lock poisoned during exit; skipping embed teardown");
                 return;
             }
         };
@@ -1769,7 +1769,7 @@ mod imp {
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 log::warn!(
-                    "[Moltorino] embedded host didn't confirm teardown within 3s; \
+                    "[ChatRuntime] embedded host didn't confirm teardown within 3s; \
                      relying on the Job Object to reap it at process exit"
                 );
             }
@@ -1921,7 +1921,7 @@ pub async fn chat_runtime_embed_start(
     _height: i32,
     _visible: bool,
 ) -> Result<(), String> {
-    Err("The embedded Moltorino integration is only available on Windows.".to_string())
+    Err("The embedded chat-runtime integration is only available on Windows.".to_string())
 }
 
 #[cfg(not(windows))]

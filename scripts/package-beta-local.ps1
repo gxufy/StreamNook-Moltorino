@@ -16,7 +16,7 @@
 param(
     [string] $RuntimeRoot = "C:\Dev\Bluzyrino_staged",
     [string] $BetaVersion = "8.4.0-beta.2",
-    [string] $OutputRoot = "C:\Dev\StreamNook-Beta-Staging\app-output"
+    [string] $OutputRoot = "C:\Dev\StreamNook-Bluzyrino-Staging\app-output"
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,7 +30,7 @@ $CargoBinName   = "StreamNook"
 $RuntimeDirName = "chat-runtime"
 $RuntimeExeName = "Bluzyrino.exe"
 $ExpectedExeSha = "aa4b2101ffab24d271361d1b25c01026d8b61bfcda3e32b08d932262021af6ed"
-$PortableName   = "StreamNook-Moltorino-$BetaVersion-windows-x64"
+$PortableName   = "StreamNook-Bluzyrino-$BetaVersion-windows-x64"
 
 function Fail([string] $Message) {
     Write-Host "FATAL: $Message" -ForegroundColor Red
@@ -155,7 +155,7 @@ Write-Host "Manifest validation passed." -ForegroundColor Green
 if (-not (Test-Path -LiteralPath $BetaConfig -PathType Leaf)) { Fail "Beta config missing: $BetaConfig" }
 $betaCfg = Get-Content -Raw -LiteralPath $BetaConfig | ConvertFrom-Json
 if ($betaCfg.version -ne $BetaVersion) { Fail "Beta config version '$($betaCfg.version)' != '$BetaVersion'." }
-if ($betaCfg.productName -ne "StreamNook Moltorino Beta") { Fail "Unexpected beta productName." }
+if ($betaCfg.productName -ne "StreamNook Bluzyrino") { Fail "Unexpected beta productName." }
 if ($betaCfg.identifier -ne "com.gxufy.streamnook-moltorino.beta") { Fail "Unexpected beta identifier." }
 if ($betaCfg.bundle.active -ne $true) { Fail "Beta bundle must be active." }
 if (($betaCfg.bundle.targets -join ",") -ne "nsis") { Fail "Beta target must be exactly NSIS." }

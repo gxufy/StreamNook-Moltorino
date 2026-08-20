@@ -1,12 +1,12 @@
-//! Optional external Moltorino chat integration.
+//! Compatible external and embedded chat-runtime integration.
 //!
-//! Moltorino is a separate Twitch chat client (a Chatterino fork). StreamNook can
-//! run either a copy bundled beside its own executable or a user-supplied one;
-//! this module validates the executable path and launches it with a channel
+//! Bluzyrino is the bundled Twitch chat client. StreamNook can also run a
+//! compatible user-supplied executable; this module validates its path and
+//! launches it with a channel
 //! argument. StreamNook's native chat is untouched and remains the default for
 //! every surface.
 //!
-//! Process ownership: every Moltorino this module launches is tracked by its live
+//! Process ownership: every chat runtime this module launches is tracked by its live
 //! [`std::process::Child`] handle and terminated when StreamNook exits (see
 //! [`shutdown_all_standalone`]), and assigned to a shared Windows Job Object with
 //! `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` as a crash-safe backstop (see the
@@ -62,11 +62,11 @@ pub(crate) mod jobobject {
             let job = match CreateJobObjectW(None, None) {
                 Ok(h) if !h.is_invalid() => h,
                 Ok(_) => {
-                    log::warn!("[Moltorino] CreateJobObjectW returned an invalid handle");
+                    log::warn!("[ChatRuntime] CreateJobObjectW returned an invalid handle");
                     return None;
                 }
                 Err(e) => {
-                    log::warn!("[Moltorino] CreateJobObjectW failed: {e}");
+                    log::warn!("[ChatRuntime] CreateJobObjectW failed: {e}");
                     return None;
                 }
             };
@@ -78,7 +78,7 @@ pub(crate) mod jobobject {
                 &info as *const _ as *const core::ffi::c_void,
                 std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
             ) {
-                log::warn!("[Moltorino] SetInformationJobObject failed: {e}");
+                log::warn!("[ChatRuntime] SetInformationJobObject failed: {e}");
                 let _ = windows::Win32::Foundation::CloseHandle(job);
                 return None;
             }
@@ -98,7 +98,7 @@ pub(crate) mod jobobject {
         let mut guard = match slot().lock() {
             Ok(g) => g,
             Err(_) => {
-                log::warn!("[Moltorino] job-object lock poisoned; skipping assign");
+                log::warn!("[ChatRuntime] job-object lock poisoned; skipping assign");
                 return;
             }
         };
@@ -111,7 +111,7 @@ pub(crate) mod jobobject {
             {
                 // A common benign cause: the child already exited between spawn and
                 // assign. Log and move on; explicit kill+wait still covers it.
-                log::warn!("[Moltorino] AssignProcessToJobObject failed: {e}");
+                log::warn!("[ChatRuntime] AssignProcessToJobObject failed: {e}");
             }
         }
     }
@@ -249,7 +249,7 @@ impl TrackedChild for std::process::Child {
             Ok(None) => {}
             Err(e) => {
                 return Err(format!(
-                    "Couldn't determine whether stale Moltorino exited: {e}"
+                    "Couldn't determine whether the stale chat runtime exited: {e}"
                 ));
             }
         }
@@ -259,16 +259,16 @@ impl TrackedChild for std::process::Child {
             return match self.try_wait() {
                 Ok(Some(_)) => Ok(()),
                 Ok(None) => Err(format!(
-                    "Couldn't terminate stale Moltorino: {kill_error}"
+                    "Couldn't terminate the stale chat runtime: {kill_error}"
                 )),
                 Err(wait_error) => Err(format!(
-                    "Couldn't terminate stale Moltorino ({kill_error}) or confirm it exited ({wait_error})"
+                    "Couldn't terminate the stale chat runtime ({kill_error}) or confirm it exited ({wait_error})"
                 )),
             };
         }
         self.wait()
             .map(|_| ())
-            .map_err(|e| format!("Couldn't reap terminated stale Moltorino: {e}"))
+            .map_err(|e| format!("Couldn't reap the terminated stale chat runtime: {e}"))
     }
 
     fn focus_existing_window(&self) -> bool {
@@ -278,7 +278,7 @@ impl TrackedChild for std::process::Child {
     }
 }
 
-/// One standalone Moltorino that *this* StreamNook instance launched, tracked so
+/// One standalone chat runtime that *this* StreamNook instance launched, tracked so
 /// it can be terminated on exit by its exact retained handle — never by PID or
 /// image name. Generic over [`TrackedChild`] only so the registry logic is
 /// testable; production is always `Owned<std::process::Child>`.
@@ -393,7 +393,7 @@ fn plan_same_channel<C: TrackedChild>(
 fn drain_and_terminate<C: TrackedChild>(entries: &mut Vec<Owned<C>>) {
     entries.retain_mut(|owned| {
         if let Err(e) = owned.child.terminate_and_reap() {
-            log::warn!("[Moltorino] shutdown cleanup failed: {e}");
+            log::warn!("[ChatRuntime] shutdown cleanup failed: {e}");
             true
         } else {
             false
@@ -401,7 +401,7 @@ fn drain_and_terminate<C: TrackedChild>(entries: &mut Vec<Owned<C>>) {
     });
 }
 
-/// Registry of standalone Moltorino processes this instance owns. Guarded by a
+/// Registry of standalone chat-runtime processes this instance owns. Guarded by a
 /// plain `Mutex`; every access reaps already-exited entries so the list never
 /// grows without bound and a dead handle is never selected for a kill.
 #[cfg(windows)]
@@ -411,7 +411,7 @@ fn owned_standalone() -> &'static std::sync::Mutex<Vec<Owned<std::process::Child
     OWNED.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-/// Terminate and reap every standalone Moltorino this instance launched, by its
+/// Terminate and reap every standalone chat runtime this instance launched, by its
 /// exact retained handle. Idempotent and safe to call during shutdown: it never
 /// panics, logs actionable errors, and continues to the next child on failure.
 /// Called from `RunEvent::Exit`. No-op on non-Windows.
@@ -422,7 +422,7 @@ pub fn shutdown_all_standalone() {
         Err(poisoned) => {
             // Even if a prior holder panicked, we still want to drain the children.
             log::warn!(
-                "[Moltorino] standalone registry lock poisoned during shutdown; draining anyway"
+                "[ChatRuntime] standalone registry lock poisoned during shutdown; draining anyway"
             );
             poisoned.into_inner()
         }
@@ -878,7 +878,7 @@ fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
     // result. Exactly one replacement can be spawned per channel per contended run.
     let mut guard = owned_standalone()
         .lock()
-        .map_err(|_| "Couldn't access the Moltorino process registry.".to_string())?;
+        .map_err(|_| "Couldn't access the chat-runtime process registry.".to_string())?;
 
     // Resolve what to do about any existing standalone on this channel. This reaps
     // dead entries, focuses a live window if there is one, respects a startup grace
@@ -889,18 +889,18 @@ fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
         o.launched_at.elapsed() < STARTUP_GRACE
     })? {
         LaunchPlan::Focused => {
-            log::debug!("[Moltorino] standalone for '{channel}' already open; focused it");
+            log::debug!("[ChatRuntime] standalone for '{channel}' already open; focused it");
             return Ok(LaunchOutcome::Focused);
         }
         LaunchPlan::Starting => {
             log::debug!(
-                "[Moltorino] standalone for '{channel}' is still starting; not launching another"
+                "[ChatRuntime] standalone for '{channel}' is still starting; not launching another"
             );
             return Ok(LaunchOutcome::Starting);
         }
         LaunchPlan::Spawn { replaced_stale } => {
             if replaced_stale {
-                log::info!("[Moltorino] replacing stale windowless standalone for '{channel}'");
+                log::info!("[ChatRuntime] replacing stale windowless standalone for '{channel}'");
             }
             replaced_stale
         }
@@ -914,7 +914,7 @@ fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
         // plugin host's spawn flags.
         .creation_flags(0x0800_0000)
         .spawn()
-        .map_err(|e| format!("Couldn't start Moltorino at {}: {}", display_path(exe), e))?;
+        .map_err(|e| format!("Couldn't start the chat runtime at {}: {}", display_path(exe), e))?;
 
     // Assign to the crash-safe job before recording: if StreamNook dies before a
     // clean shutdown, the OS still kills this child. Best-effort — the explicit
@@ -935,7 +935,7 @@ fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
 
 #[cfg(not(windows))]
 fn spawn_moltorino(_exe: &Path, _channel: &str) -> Result<LaunchOutcome, String> {
-    Err("The Moltorino integration is only available on Windows.".to_string())
+    Err("The chat-runtime integration is only available on Windows.".to_string())
 }
 
 #[cfg(test)]
