@@ -5,7 +5,7 @@ import ChatMessageList from './ChatMessageList';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { openProfilePopup } from '../utils/openProfilePopup';
-import { Pickaxe, Gift, Settings, MessagesSquare, Zap, BarChart3 } from 'lucide-react';
+import { Pickaxe, Gift, Settings, MessagesSquare, PanelRightOpen, Zap, BarChart3 } from 'lucide-react';
 
 // Channel Points Icon (Twitch style)
 const ChannelPointsIcon = ({ className = "", size = 14 }: { className?: string; size?: number }) => (
@@ -790,10 +790,10 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
     !isMultiNookActive &&
     !isVodReplay &&
     currentMediaType === 'live' &&
-    canOpenInChatRuntimeGate(settings.moltorino?.show_chat_button ?? false, chatRuntimeStatus.available);
+    canOpenInChatRuntimeGate(settings.moltorino?.show_chat_button ?? true, chatRuntimeStatus.available);
   const chatRuntimeOpenLabel =
     chatRuntimeStatus.display_name === 'Bluzyrino'
-      ? 'Open in Bluzyrino'
+      ? 'Open Bluzyrino App'
       : chatRuntimeStatus.display_name === 'Moltorino'
         ? 'Open in Moltorino'
         : 'Open in chat runtime';
@@ -3778,6 +3778,79 @@ const ChatWidget = ({ channelOverride, hypeTrainOverride }: ChatWidgetProps = {}
                       </button>
                     </Tooltip>
                   )}
+                  {/* Switch the current StreamNook chat panel itself to Bluzyrino.
+                      This button intentionally sits LEFT of "Open Bluzyrino App". */}
+                  {currentStream &&
+                    canOpenInChatRuntime &&
+                    chatRuntimeStatus.display_name === 'Bluzyrino' && (
+                      <Tooltip content="Use Bluzyrino Here" side="top">
+                        <button
+                          type="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+
+                            try {
+                              const store = useAppStore.getState();
+                              const before = store.settings;
+                              const wasEmbedded =
+                                before.moltorino?.embedded_chat ?? true;
+
+                              // If already enabled but currently showing native chat
+                              // due to a fallback, cycle the setting to give this
+                              // channel a clean retry.
+                              if (wasEmbedded) {
+                                store.updateSettings({
+                                  ...before,
+                                  moltorino: {
+                                    ...(before.moltorino ?? {}),
+                                    embedded_chat: false,
+                                  },
+                                });
+
+                                await new Promise((resolve) =>
+                                  setTimeout(resolve, 75)
+                                );
+                              }
+
+                              // Close any previous embedded/setup Bluzyrino so the
+                              // fresh process reloads saved Twitch account/settings.
+                              await invoke('chat_runtime_embed_stop');
+                              await invoke('close_chat_runtime_setup');
+
+                              const latestStore = useAppStore.getState();
+                              const latest = latestStore.settings;
+
+                              latestStore.updateSettings({
+                                ...latest,
+                                moltorino: {
+                                  ...(latest.moltorino ?? {}),
+                                  embedded_chat: true,
+                                },
+                              });
+
+                              latestStore.addToast(
+                                'Using Bluzyrino in StreamNook chat',
+                                'success'
+                              );
+                            } catch (err) {
+                              Logger.error(
+                                '[ChatWidget] Switch to embedded Bluzyrino failed:',
+                                err
+                              );
+
+                              useAppStore
+                                .getState()
+                                .addToast(String(err), 'error');
+                            }
+                          }}
+                          className="pointer-events-auto grid h-5 w-5 place-items-center rounded text-textSecondary transition-colors hover:bg-surface-hover hover:text-textPrimary"
+                          aria-label="Use Bluzyrino Here"
+                        >
+                          <PanelRightOpen className="h-[13px] w-[13px]" />
+                        </button>
+                      </Tooltip>
+                    )}
+
                   {/* Open the active channel in the resolved compatible runtime.
                       Native chat remains connected and on screen. */}
                   {currentStream && canOpenInChatRuntime && (

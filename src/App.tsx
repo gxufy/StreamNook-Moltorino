@@ -149,13 +149,15 @@ function App() {
   // every toast, every mod-log entry (which fires on the IRC hot path) and every
   // 30s drops poll re-rendered the root and the whole tree under it.
   const { loadSettings, checkAuthStatus, addToast, setShowBadgesOverlay, setShowWhispersOverlay, updateSettings, loadActiveDropsCache, setProfileModalUser, openSettings } = useAppStore.getState();
-  const { chatPlacement, isLoading, isBooting, streamUrl, currentMediaType, showBadgesOverlay, badgesOverlayInitialPaintId, badgesOverlayInitialBadgeId, badgesOverlayInitialStreamNook, badgesOverlayInitialTarget, showWhispersOverlay, settings, isTheaterMode, isHomeActive, profileModalUser } = useAppStore(
+  const { chatPlacement, isLoading, isBooting, streamUrl, currentMediaType, showDropsOverlay, showMarketplaceOverlay, showBadgesOverlay, badgesOverlayInitialPaintId, badgesOverlayInitialBadgeId, badgesOverlayInitialStreamNook, badgesOverlayInitialTarget, showWhispersOverlay, settings, isTheaterMode, isHomeActive, profileModalUser } = useAppStore(
     useShallow((s) => ({
       chatPlacement: s.chatPlacement,
       isLoading: s.isLoading,
       isBooting: s.isBooting,
       streamUrl: s.streamUrl,
       currentMediaType: s.currentMediaType,
+      showDropsOverlay: s.showDropsOverlay,
+      showMarketplaceOverlay: s.showMarketplaceOverlay,
       showBadgesOverlay: s.showBadgesOverlay,
       badgesOverlayInitialPaintId: s.badgesOverlayInitialPaintId,
       badgesOverlayInitialBadgeId: s.badgesOverlayInitialBadgeId,
@@ -168,6 +170,31 @@ function App() {
       profileModalUser: s.profileModalUser,
     })),
   );
+  // Full-page overlays own the main content area. The embedded Bluzyrino
+  // surface is a native Win32 child above the WebView, so suppress both the
+  // React chat panel and the native host while one of these overlays is open.
+  const hideDockedChatForOverlay =
+    showDropsOverlay ||
+    showMarketplaceOverlay ||
+    showBadgesOverlay;
+
+  useEffect(() => {
+    if (!hideDockedChatForOverlay) return;
+
+    invoke('chat_runtime_embed_set_bounds', {
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      visible: false,
+    }).catch((err) => {
+      Logger.warn(
+        '[ChatRuntime] failed to hide embed for full-page overlay:',
+        err,
+      );
+    });
+  }, [hideDockedChatForOverlay]);
+
   // Channels owned by StreamNook MultiChat popouts. When the currently-watched
   // channel is in here, the in-app chat panel collapses so the popout becomes
   // the sole chat surface — no duplicate chat across windows.
@@ -1811,7 +1838,7 @@ function App() {
                       are guarded on user_login, which playMedia only sets when there is a
                       channel to replay — so a clip with no surviving source VOD still gets
                       no empty panel. */}
-                  {chatPlacement !== 'hidden' && (currentMediaType === 'live' || currentMediaType === 'offline_chat' || ((currentMediaType === 'video' || currentMediaType === 'clip') && !!currentStream?.user_login) || isMultiNookActive) && !activeChatChannelInPopout && (
+                  {chatPlacement !== 'hidden' && (currentMediaType === 'live' || currentMediaType === 'offline_chat' || ((currentMediaType === 'video' || currentMediaType === 'clip') && !!currentStream?.user_login) || isMultiNookActive) && !activeChatChannelInPopout && !hideDockedChatForOverlay && (
                     autoHideActive ? (
                       // Reveal-on-hover (side docks only): a thin edge handle is
                       // always visible; hovering the wrapper slides the chat out

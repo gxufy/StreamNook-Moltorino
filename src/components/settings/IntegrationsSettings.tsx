@@ -69,6 +69,7 @@ const IntegrationsSettings = () => {
   // not-found reason. This is the source of truth for the status line — the empty
   // path field no longer implies "unavailable", because a bundled copy may exist.
   const [runtime, setRuntime] = useState<ChatRuntimeStatus | null>(null);
+  const [openingSetup, setOpeningSetup] = useState(false);
 
   const setMoltorino = (patch: Partial<typeof moltorino>) =>
     updateSettings({ ...settings, moltorino: { ...moltorino, ...patch } });
@@ -166,6 +167,27 @@ const IntegrationsSettings = () => {
       Logger.error('[Integrations] Chat runtime browse failed:', e);
     }
   };
+  // Bluzyrino owns its Twitch login and preferences. Embedded chat uses
+  // that same profile, so StreamNook exposes the full Bluzyrino UI here.
+  const openBluzyrinoSetup = async () => {
+    setOpeningSetup(true);
+    try {
+      await invoke('launch_chat_runtime_setup', { path: null });
+      useAppStore.getState().addToast(
+        'Bluzyrino opened. Sign in or change its settings there; embedded chat uses the same profile.',
+        'info',
+      );
+    } catch (e) {
+      Logger.error('[Integrations] Bluzyrino setup launch failed:', e);
+      useAppStore.getState().addToast(
+        `Couldn't open Bluzyrino: ${String(e)}`,
+        'error',
+      );
+    } finally {
+      setOpeningSetup(false);
+    }
+  };
+
   // Plugins contribute their own integration panels here, the same way a drops
   // plugin contributes into the Drops center's settings slot. The tab renders
   // whatever is contributed and names none of it; with no such plugin installed
@@ -308,6 +330,32 @@ const IntegrationsSettings = () => {
               </div>
             )}
 
+            {(runtime?.runtime_kind === 'bundled_bluzyrino' ||
+              runtime?.runtime_kind === 'custom_bluzyrino') && (
+              <div className="rounded-md border border-white/[0.06] bg-white/[0.025] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-[12px] font-medium text-textPrimary">
+                      Bluzyrino account & settings
+                    </div>
+                    <p className="mt-0.5 text-[12px] leading-relaxed text-textSecondary">
+                      Bluzyrino keeps its own Twitch login and preferences. Open the full app once to
+                      sign in or change them; embedded chat uses the same Bluzyrino profile.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={openBluzyrinoSetup}
+                    disabled={openingSetup}
+                    className="glass-button-secondary flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 text-[13px] text-textSecondary hover:text-textPrimary disabled:cursor-wait disabled:opacity-60"
+                  >
+                    {openingSetup && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {openingSetup ? 'Opening...' : 'Account & Settings'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div>
               <div className="mb-1.5 text-[12px] font-medium text-textPrimary">
                 Custom chat executable
@@ -374,8 +422,8 @@ const IntegrationsSettings = () => {
                 </p>
               </div>
               <Toggle
-                enabled={moltorino.show_chat_button ?? false}
-                onChange={() => setMoltorino({ show_chat_button: !(moltorino.show_chat_button ?? false) })}
+                enabled={moltorino.show_chat_button ?? true}
+                onChange={() => setMoltorino({ show_chat_button: !(moltorino.show_chat_button ?? true) })}
               />
             </div>
 
@@ -392,8 +440,8 @@ const IntegrationsSettings = () => {
                 </p>
               </div>
               <Toggle
-                enabled={moltorino.embedded_chat ?? false}
-                onChange={() => setMoltorino({ embedded_chat: !(moltorino.embedded_chat ?? false) })}
+                enabled={moltorino.embedded_chat ?? true}
+                onChange={() => setMoltorino({ embedded_chat: !(moltorino.embedded_chat ?? true) })}
               />
             </div>
           </div>

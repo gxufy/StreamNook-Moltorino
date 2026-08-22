@@ -867,6 +867,124 @@ pub async fn launch_moltorino(
     launch_chat_runtime(path, channel, state).await
 }
 
+/// Launch the full chat-runtime UI without a channel argument.
+/// This lets bundled Bluzyrino users sign in and edit Bluzyrino settings
+/// without manually browsing into the chat-runtime directory.
+#[tauri::command]
+pub async fn launch_chat_runtime_setup(
+    path: Option<String>,
+    state: tauri::State<'_, crate::models::settings::AppState>,
+) -> Result<LaunchOutcome, String> {
+    // Bluzyrino/Chatterino is effectively single-instance. A running embedded
+    // process or a StreamNook-owned "-c" external-chat process can otherwise
+    // capture this no-argument launch, leaving the user in command-line mode
+    // where account/settings editing is forbidden.
+    super::moltorino_embed::stop_blocking_for_setup();
+    shutdown_all_standalone();
+
+    let configured = configured_runtime_path(&state)?;
+    let raw = path
+        .filter(|p| !p.trim().is_empty())
+        .unwrap_or(configured);
+    let runtime = resolve_chat_runtime(&raw)?;
+    spawn_chat_runtime_setup(&runtime.executable_path)
+}
+
+/// Close only the full Bluzyrino account/settings instance StreamNook launched.
+/// This is used by "Use Bluzyrino Here" before the embedded instance is restarted,
+/// so the new process rereads the saved account/preferences.
+#[tauri::command]
+pub async fn close_chat_runtime_setup() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        const SETUP_REGISTRY_KEY: &str = "__streamnook_chat_runtime_setup__";
+
+        let mut guard = owned_standalone()
+            .lock()
+            .map_err(|_| "Couldn't access the chat-runtime process registry.".to_string())?;
+
+        // Reap anything that already exited naturally first.
+        guard.retain_mut(|owned| !owned.child.reap_if_exited());
+
+        let Some(index) = guard
+            .iter()
+            .position(|owned| owned.channel == SETUP_REGISTRY_KEY)
+        else {
+            return Ok(());
+        };
+
+        let mut owned = guard.remove(index);
+        if let Err(e) = owned.child.terminate_and_reap() {
+            // Keep ownership if teardown is uncertain. We must never lose the
+            // retained handle and accidentally leave a StreamNook-owned process
+            // outside our lifecycle tracking.
+            guard.insert(index, owned);
+            return Err(format!("Couldn't close Bluzyrino account/settings: {e}"));
+        }
+
+        Ok(())
+    }
+
+    #[cfg(not(windows))]
+    {
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+fn spawn_chat_runtime_setup(exe: &Path) -> Result<LaunchOutcome, String> {
+    use std::os::windows::io::AsRawHandle;
+    use std::os::windows::process::CommandExt;
+
+    const SETUP_REGISTRY_KEY: &str = "__streamnook_chat_runtime_setup__";
+
+    let mut guard = owned_standalone()
+        .lock()
+        .map_err(|_| "Couldn't access the chat-runtime process registry.".to_string())?;
+
+    let replaced_stale = match plan_same_channel(
+        &mut guard,
+        SETUP_REGISTRY_KEY,
+        |o| o.launched_at.elapsed() < STARTUP_GRACE,
+    )? {
+        LaunchPlan::Focused => return Ok(LaunchOutcome::Focused),
+        LaunchPlan::Starting => return Ok(LaunchOutcome::Starting),
+        LaunchPlan::Spawn { replaced_stale } => replaced_stale,
+    };
+
+    let child = std::process::Command::new(exe)
+        .creation_flags(0x0800_0000)
+        .spawn()
+        .map_err(|e| {
+            format!(
+                "Couldn't start the chat runtime at {}: {}",
+                display_path(exe),
+                e
+            )
+        })?;
+
+    jobobject::assign(child.as_raw_handle() as isize);
+
+    guard.push(Owned {
+        channel: SETUP_REGISTRY_KEY.to_string(),
+        child,
+        launched_at: std::time::Instant::now(),
+    });
+
+    Ok(if replaced_stale {
+        LaunchOutcome::Replaced
+    } else {
+        LaunchOutcome::Launched
+    })
+}
+
+#[cfg(not(windows))]
+fn spawn_chat_runtime_setup(
+    _exe: &Path,
+) -> Result<LaunchOutcome, String> {
+    Err("The chat-runtime integration is only available on Windows.".to_string())
+}
+
 #[cfg(windows)]
 fn spawn_moltorino(exe: &Path, channel: &str) -> Result<LaunchOutcome, String> {
     use std::os::windows::io::AsRawHandle;

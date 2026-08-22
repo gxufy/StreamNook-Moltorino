@@ -1212,7 +1212,7 @@ export const SETTINGS_INDEX: SettingsIndexEntry[] = [
     section: 'Chat Runtime',
     sectionId: 'settings-section-moltorino',
     title: 'Open chat externally',
-    description: 'Show an Open in Bluzyrino, Open in Moltorino, or Open in chat runtime button beside Pop out chat. Opt-in; native chat stays active.'
+    description: 'Show the external chat-runtime button beside Pop out chat. For Bluzyrino, the action is labeled Open Bluzyrino App. Native chat stays active.'
   },
   {
     tab: 'Integrations',

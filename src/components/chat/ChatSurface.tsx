@@ -83,7 +83,7 @@ function useFocusedChatTarget(): FocusedChatTarget {
 }
 
 const ChatSurface = () => {
-  const embeddedEnabled = useAppStore((s) => s.settings?.moltorino?.embedded_chat ?? false);
+  const embeddedEnabled = useAppStore((s) => s.settings?.moltorino?.embedded_chat ?? true);
   const executablePath = useAppStore((s) => s.settings?.moltorino?.executable_path ?? '');
   // The embedded chat is a native Win32 child window Rust overlays on the chat
   // rectangle; it composites ABOVE the WebView, so a DOM overlay like the Settings

@@ -1224,6 +1224,9 @@ fn main() {
             // Generic compatible chat-runtime commands
             validate_chat_runtime_path,
             launch_chat_runtime,
+
+            launch_chat_runtime_setup,
+            close_chat_runtime_setup,
             chat_runtime_status,
             chat_runtime_embed_start,
             chat_runtime_embed_set_bounds,

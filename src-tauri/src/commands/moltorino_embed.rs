@@ -1777,6 +1777,18 @@ mod imp {
     }
 }
 
+/// Fully stop the embedded runtime before opening Bluzyrino's normal
+/// account/settings UI. Unlike the ordinary UI stop command, this waits until
+/// the child has actually exited so Bluzyrino's single-instance handling cannot
+/// redirect the following no-argument launch into the old embedded process.
+#[cfg(windows)]
+pub(crate) fn stop_blocking_for_setup() {
+    imp::stop_blocking();
+}
+
+#[cfg(not(windows))]
+pub(crate) fn stop_blocking_for_setup() {}
+
 // ---------------------------------------------------------------------------
 // Tauri commands (thin wrappers; real work is in `imp` on Windows).
 // ---------------------------------------------------------------------------

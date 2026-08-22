@@ -155,23 +155,35 @@ impl Default for StreamlinkSettings {
 /// object name is retained so existing beta settings round-trip unchanged. The
 /// optional absolute executable path is machine-local, so this group is excluded
 /// from portable settings backups — see NON_PORTABLE_KEYS.
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MoltorinoSettings {
     /// Absolute path to a compatible chat-runtime executable. None/empty uses the
     /// bundled runtime when present.
     #[serde(default)]
     pub executable_path: Option<String>,
+
     /// Whether the "Open in chat runtime" action shows in the chat header.
-    /// Defaults to false: the integration is opt-in and StreamNook's native chat
-    /// stays the default with no new UI until the user asks for it.
-    #[serde(default)]
+    /// On by default for StreamNook Bluzyrino. An explicitly saved false remains
+    /// false, so an existing user's choice is never overwritten.
+    #[serde(default = "default_true")]
     pub show_chat_button: bool,
+
     /// Use the chat runtime *embedded* in the main chat area instead of the native
-    /// chat panel. Defaults to false so native chat stays the default and old
-    /// settings.json files (which lack this key) load unchanged. Requires a bundled
-    /// or configured compatible runtime.
-    #[serde(default)]
+    /// chat panel. On by default when a compatible runtime is available; native chat
+    /// remains the universal fallback for unsupported contexts or failures. An
+    /// explicitly saved false remains false.
+    #[serde(default = "default_true")]
     pub embedded_chat: bool,
+}
+
+impl Default for MoltorinoSettings {
+    fn default() -> Self {
+        Self {
+            executable_path: None,
+            show_chat_button: true,
+            embedded_chat: true,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -765,6 +777,9 @@ mod backup_persistence_tests {
         assert_eq!(first.get("name").and_then(|v| v.as_str()), Some("FNCS"));
         assert!(first.get("icon").is_some());
         let chan = first["channels"][0].as_object().expect("channel object");
-        assert_eq!(chan.get("quality").and_then(|v| v.as_str()), Some("720p60"));
+        assert_eq!(
+            chan.get("quality").and_then(|v| v.as_str()),
+            Some("720p60")
+        );
     }
 }

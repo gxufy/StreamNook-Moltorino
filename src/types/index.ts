@@ -97,8 +97,8 @@ export interface ChatLoggingSettings {
 // unchanged. Machine-local, so it is excluded from portable settings backups.
 export interface MoltorinoSettings {
   executable_path?: string; // Absolute path to a compatible chat-runtime .exe; unset = use bundled runtime
-  show_chat_button?: boolean; // Show an "Open in chat runtime" action in the chat header (default: false)
-  embedded_chat?: boolean; // Embed the chat runtime in the main chat area instead of native chat (default: false)
+  show_chat_button?: boolean; // Show an "Open in chat runtime" action in the chat header (default: true)
+  embedded_chat?: boolean; // Embed the chat runtime in the main chat area instead of native chat (default: true)
 }
 
 export interface DropsSettings {
