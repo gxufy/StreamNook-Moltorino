@@ -20,7 +20,7 @@ env:
 
 jobs:
   prepare-sync:
-    if: github.repository == 'gxufy/StreamNook-Moltorino'
+    if: github.repository == 'gxufy/StreamNook-Bluzyrino'
     runs-on: windows-latest
 
     steps:

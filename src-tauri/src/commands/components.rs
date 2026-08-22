@@ -169,7 +169,7 @@ const UPDATE_BUNDLE_NAME: &str = "StreamNook.7z";
 /// which excludes prereleases. Phase 3C-2 will replace this release's manifest
 /// asset after publishing each versioned beta bundle.
 const FORK_BETA_MANIFEST_URL: &str =
-    "https://github.com/gxufy/StreamNook-Moltorino/releases/download/beta-feed/update-beta.json";
+    "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/beta-feed/update-beta.json";
 
 /// Strict contract for the gxufy beta feed.
 #[derive(Debug, serde::Deserialize)]
@@ -269,7 +269,7 @@ fn validate_fork_download_url(download_url: &str, version: &str) -> Result<(), S
         && segments[5] == UPDATE_BUNDLE_NAME;
     if !allowed {
         return Err(
-            "Fork update download URL is outside gxufy/StreamNook-Moltorino releases".to_string(),
+            "Fork update download URL is outside gxufy/StreamNook-Bluzyrino releases".to_string(),
         );
     }
     Ok(())
@@ -859,7 +859,7 @@ mod tests {
         "channel": "beta",
         "version": "8.4.0-beta.3",
         "platform": "windows-x64",
-        "download_url": "https://github.com/gxufy/StreamNook-Moltorino/releases/download/v8.4.0-beta.3/StreamNook.7z",
+        "download_url": "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/v8.4.0-beta.3/StreamNook.7z",
         "bundle_name": "StreamNook.7z",
         "sha256": "AA4B2101FFAB24D271361D1B25C01026D8B61BFCDA3E32B08D932262021AF6ED",
         "size": 123456,
@@ -937,21 +937,21 @@ mod tests {
     #[test]
     fn fork_manifest_rejects_urls_outside_exact_release_contract() {
         for rejected_url in [
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download//StreamNook.7z",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/v8.4.0-beta.4/StreamNook.7z",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/latest/download/StreamNook.7z",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/v8.4.0-beta.3/StreamNook.7z/extra",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/v8.4.0-beta.3/StreamNook.7z?download=1",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/v8.4.0-beta.3/StreamNook.7z#asset",
-            "http://github.com/gxufy/StreamNook-Moltorino/releases/download/v8.4.0-beta.3/StreamNook.7z",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download//StreamNook.7z",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/v8.4.0-beta.4/StreamNook.7z",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/latest/download/StreamNook.7z",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/v8.4.0-beta.3/StreamNook.7z/extra",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/v8.4.0-beta.3/StreamNook.7z?download=1",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/v8.4.0-beta.3/StreamNook.7z#asset",
+            "http://github.com/gxufy/StreamNook-Bluzyrino/releases/download/v8.4.0-beta.3/StreamNook.7z",
             "https://streamnook.app/download",
             "https://github.com/winters27/StreamNook/releases/download/v8.4.0/StreamNook.7z",
             "https://github.com/another/StreamNook-Moltorino/releases/download/v8.4.0-beta.3/StreamNook.7z",
             "https://github.com/gxufy/another-repo/releases/download/v8.4.0-beta.3/StreamNook.7z",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/v8.4.0-beta.3/Other.7z",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/v8.4.0-beta.3/Other.7z",
         ] {
             let json = manifest_with(&[(
-                "https://github.com/gxufy/StreamNook-Moltorino/releases/download/v8.4.0-beta.3/StreamNook.7z",
+                "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/v8.4.0-beta.3/StreamNook.7z",
                 rejected_url,
             )]);
             assert!(
@@ -982,7 +982,7 @@ mod tests {
     fn fork_feed_is_fixed_and_has_no_fallback_source() {
         assert_eq!(
             FORK_BETA_MANIFEST_URL,
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/beta-feed/update-beta.json"
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/beta-feed/update-beta.json"
         );
         assert!(!FORK_BETA_MANIFEST_URL.contains("streamnook.app"));
         assert!(!FORK_BETA_MANIFEST_URL.contains("winters27"));

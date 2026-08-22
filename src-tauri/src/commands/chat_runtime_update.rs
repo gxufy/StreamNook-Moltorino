@@ -613,7 +613,7 @@ mod tests {
             "version": "2.1.0",
             "platform": UPDATE_PLATFORM,
             "architecture": RUNTIME_ARCHITECTURE,
-            "archive_url": "https://github.com/gxufy/StreamNook-Moltorino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip",
+            "archive_url": "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip",
             "archive_name": "Bluzyrino-2.1.0-windows-x64.zip",
             "archive_sha256": "a".repeat(64),
             "archive_size_bytes": 64 * 1024 * 1024,
@@ -869,14 +869,14 @@ mod tests {
     #[test]
     fn future_update_url_is_exact_https_gxufy_contract() {
         for rejected in [
-            "http://github.com/gxufy/StreamNook-Moltorino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip",
+            "http://github.com/gxufy/StreamNook-Bluzyrino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip",
             "https://github.com/other/StreamNook-Moltorino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip",
             "https://github.com/gxufy/Other/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/latest/download/Bluzyrino-2.1.0-windows-x64.zip",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/runtime-v2.2.0/Bluzyrino-2.1.0-windows-x64.zip",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/runtime-v2.1.0/Other.zip",
-            "https://github.com/gxufy/StreamNook-Moltorino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip?download=1",
-            "https://user@github.com/gxufy/StreamNook-Moltorino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/latest/download/Bluzyrino-2.1.0-windows-x64.zip",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/runtime-v2.2.0/Bluzyrino-2.1.0-windows-x64.zip",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/runtime-v2.1.0/Other.zip",
+            "https://github.com/gxufy/StreamNook-Bluzyrino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip?download=1",
+            "https://user@github.com/gxufy/StreamNook-Bluzyrino/releases/download/runtime-v2.1.0/Bluzyrino-2.1.0-windows-x64.zip",
         ] {
             let mut manifest = valid_update_manifest();
             manifest["archive_url"] = Value::String(rejected.to_string());

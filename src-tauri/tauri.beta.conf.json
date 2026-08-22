@@ -6,6 +6,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
     "resources": {
       "target/beta-package-resources/": ""
     },
