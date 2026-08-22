@@ -32,6 +32,13 @@ $RuntimeExeName = "Bluzyrino.exe"
 $ExpectedExeSha = "aa4b2101ffab24d271361d1b25c01026d8b61bfcda3e32b08d932262021af6ed"
 $PortableName   = "StreamNook-Bluzyrino-$BetaVersion-windows-x64"
 
+$ComplianceFiles = @(
+    "THIRD_PARTY_NOTICES.md",
+    "DISTRIBUTION_NOTES.md",
+    "SOURCES.md"
+)
+$ComplianceLicensesDir = Join-Path $RepoRoot "licenses"
+
 function Fail([string] $Message) {
     Write-Host "FATAL: $Message" -ForegroundColor Red
     exit 1
@@ -163,6 +170,16 @@ if ($betaCfg.bundle.windows.nsis.installMode -ne "currentUser") { Fail "NSIS ins
 $resProp = $betaCfg.bundle.resources.PSObject.Properties["target/beta-package-resources/"]
 if ($null -eq $resProp -or $resProp.Value -ne "") { Fail "Unexpected beta resource mapping." }
 
+foreach ($name in $ComplianceFiles) {
+    $source = Join-Path $RepoRoot $name
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+        Fail "Required compliance file missing: $name"
+    }
+}
+if (-not (Test-Path -LiteralPath $ComplianceLicensesDir -PathType Container)) {
+    Fail "Required licenses directory missing: $ComplianceLicensesDir"
+}
+
 Section "B. Recreate generated package resources"
 $expectedStaging = Join-Path $SrcTauri "target\beta-package-resources"
 if ($StagingDir -ne $expectedStaging) { Fail "Staging path guard failed: $StagingDir" }
@@ -171,6 +188,11 @@ New-Item -ItemType Directory -Path $StagingDir -Force | Out-Null
 $stagedRuntime = Join-Path $StagingDir $RuntimeDirName
 Copy-Item -LiteralPath $runtime.Root -Destination $stagedRuntime -Recurse -Force
 $null = Test-RuntimeManifest $stagedRuntime
+
+foreach ($name in $ComplianceFiles) {
+    Copy-Item -LiteralPath (Join-Path $RepoRoot $name) -Destination (Join-Path $StagingDir $name) -Force
+}
+Copy-Item -LiteralPath $ComplianceLicensesDir -Destination (Join-Path $StagingDir "licenses") -Recurse -Force
 
 # Remove only stale generated runtime resources that could leak from beta.1.
 $releaseRoot = Join-Path $SrcTauri "target\release"
@@ -208,14 +230,28 @@ finally {
 
 Section "D. Locate and validate generated outputs"
 $releaseExe = Join-Path $releaseRoot "$CargoBinName.exe"
-$releaseRuntime = Join-Path $releaseRoot "$RuntimeDirName\$RuntimeExeName"
+
+# Tauri bundles resources directly from target\beta-package-resources.
+# They are not emitted as loose files beside target\release\StreamNook.exe.
+$packagedRuntimeRoot = Join-Path $StagingDir $RuntimeDirName
+$packagedRuntime = Join-Path $packagedRuntimeRoot $RuntimeExeName
+
 if (-not (Test-Path -LiteralPath $releaseExe -PathType Leaf)) { Fail "Release executable missing." }
-if (-not (Test-Path -LiteralPath $releaseRuntime -PathType Leaf)) { Fail "Release chat runtime missing." }
-if (Test-Path -LiteralPath (Join-Path $releaseRoot "moltorino\Moltorino7.exe")) {
-    Fail "Stale legacy Moltorino runtime exists in release output."
+if (-not (Test-Path -LiteralPath $packagedRuntime -PathType Leaf)) { Fail "Packaged chat runtime missing." }
+if (Test-Path -LiteralPath (Join-Path $StagingDir "moltorino\Moltorino7.exe")) {
+    Fail "Stale legacy Moltorino runtime exists in package resources."
 }
-if ((Get-Sha256 $releaseRuntime) -ne $ExpectedExeSha) { Fail "Release Bluzyrino hash mismatch." }
-$null = Test-RuntimeManifest (Join-Path $releaseRoot $RuntimeDirName)
+if ((Get-Sha256 $packagedRuntime) -ne $ExpectedExeSha) { Fail "Packaged Bluzyrino hash mismatch." }
+$null = Test-RuntimeManifest $packagedRuntimeRoot
+
+foreach ($name in $ComplianceFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $StagingDir $name) -PathType Leaf)) {
+        Fail "Packaged compliance file missing: $name"
+    }
+}
+if (-not (Test-Path -LiteralPath (Join-Path $StagingDir "licenses") -PathType Container)) {
+    Fail "Packaged licenses directory missing."
+}
 
 $nsisDir = Join-Path $releaseRoot "bundle\nsis"
 $nsisNew = @(Get-ChildItem -LiteralPath $nsisDir -Filter "*.exe" -File |
@@ -234,7 +270,12 @@ foreach ($path in @($portableRoot, $portableZip, $setupOut, $checksums)) {
 }
 New-Item -ItemType Directory -Path $portableRoot | Out-Null
 Copy-Item -LiteralPath $releaseExe -Destination (Join-Path $portableRoot "$CargoBinName.exe")
-Copy-Item -LiteralPath (Join-Path $releaseRoot $RuntimeDirName) -Destination $portableRoot -Recurse
+Copy-Item -LiteralPath $packagedRuntimeRoot -Destination $portableRoot -Recurse
+
+foreach ($name in $ComplianceFiles) {
+    Copy-Item -LiteralPath (Join-Path $RepoRoot $name) -Destination (Join-Path $portableRoot $name) -Force
+}
+Copy-Item -LiteralPath $ComplianceLicensesDir -Destination (Join-Path $portableRoot "licenses") -Recurse -Force
 
 $portableRuntime = Join-Path $portableRoot "$RuntimeDirName\$RuntimeExeName"
 if (-not (Test-Path -LiteralPath $portableRuntime -PathType Leaf)) { Fail "Portable Bluzyrino entrypoint missing." }
@@ -242,6 +283,14 @@ if (Test-Path -LiteralPath (Join-Path $portableRoot "moltorino\Moltorino7.exe"))
     Fail "Legacy Moltorino runtime leaked into portable output."
 }
 $null = Test-RuntimeManifest (Join-Path $portableRoot $RuntimeDirName)
+foreach ($name in $ComplianceFiles) {
+    if (-not (Test-Path -LiteralPath (Join-Path $portableRoot $name) -PathType Leaf)) {
+        Fail "Portable compliance file missing: $name"
+    }
+}
+if (-not (Test-Path -LiteralPath (Join-Path $portableRoot "licenses") -PathType Container)) {
+    Fail "Portable licenses directory missing."
+}
 $portableRuntimeSha = Get-Sha256 $portableRuntime
 
 $sevenZip = Get-Command 7z -ErrorAction SilentlyContinue
@@ -280,5 +329,5 @@ Write-Host "portable ZIP SHA-256  : $portableZipSha"
 Write-Host "installer             : $setupOut"
 Write-Host "installer SHA-256     : $setupSha"
 Write-Host "checksums             : $checksums"
-Write-Host "Legacy moltorino runtime absent from new portable/release output." -ForegroundColor Green
+Write-Host "Legacy moltorino runtime absent from new portable/package-resource output." -ForegroundColor Green
 Write-Host "LOCAL-ONLY beta packaging complete. Nothing uploaded, released, tagged, or committed." -ForegroundColor Green
